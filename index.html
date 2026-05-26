@@ -65,7 +65,12 @@
   }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
 
-  #map { width: 100%; height: 100%; min-height: 480px; background: var(--canvas); }
+  #map {
+    width: 100%; height: 100%; min-height: 480px;
+    background: var(--canvas);
+    border: 1.5px solid var(--ink);
+    box-sizing: border-box;
+  }
   /* Editorial canvas — no tiles, plain background */
   .leaflet-container { background: var(--canvas) !important; outline: none; font-family: "Open Sans", sans-serif; }
   .leaflet-control-attribution {
@@ -353,7 +358,9 @@
       <h2>Reefer lane alerts</h2>
       <div id="lanes-list"></div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
-        Click a lane (here or on the map) to focus it.
+        Click a lane to draw its path on the map in
+        <span style="color:var(--accent);font-weight:600;">orange</span>.
+        Click again to hide it.
       </div>
     </section>
 
@@ -744,22 +751,20 @@ async function drawStatesHeatmap() {
 function styleFeature(feat) {
   const key = feat.properties._key;
   const region = STATE_TO_REGION[key];
+  const base = {
+    color: "#1a1a1a",   // black state outline
+    weight: 0.7,
+    opacity: 0.9,
+  };
   if (!region) {
-    return {
-      fillColor: "#f4f4f4",
-      fillOpacity: 1,
-      color: "#e5e5e5",
-      weight: 0.6,
-    };
+    return { ...base, fillColor: "#f4f4f4", fillOpacity: 1 };
   }
   const avg = regionAverage(region);
   const fill = rampColor(avg);
   return {
+    ...base,
     fillColor: fill || "#f4f4f4",
     fillOpacity: fill ? 0.88 : 1,
-    // No internal state border within a region — same color blends visually
-    color: "#fff",
-    weight: 0.4,
   };
 }
 
@@ -787,7 +792,7 @@ function bindFeatureTooltip(feat, layer) {
   }
   layer.bindTooltip(body, { sticky: true, className: "hh-tip" });
   layer.on({
-    mouseover: (e) => e.target.setStyle({ weight: 1.2, color: "#fff" }),
+    mouseover: (e) => e.target.setStyle({ weight: 1.6, color: "#1a1a1a" }),
     mouseout:  (e) => statesLayer.resetStyle(e.target),
   });
 }
@@ -823,66 +828,68 @@ function drawLanes() {
   const listEl = document.getElementById("lanes-list");
   listEl.innerHTML = "";
 
+  // Sidebar list — built for every lane regardless of selection.
   LANES.forEach((lane) => {
     const flagged = isLaneFlagged(lane);
     const isSel = lane.id === selectedLaneId;
-    const colored = flagged || isSel;
-    const hex = colored ? "#ec7700" : "#4a8b2c";
-
-    // Path
-    const poly = L.polyline(lane.waypoints, {
-      color: hex,
-      weight: colored ? 3.5 : 2,
-      opacity: 0.92,
-    }).addTo(lanesLayer);
-    poly.on("click", () => selectLane(lane.id));
-    poly.bindTooltip(
-      `<span class="tip-title">${lane.name}</span>` +
-      `<span>${lane.ports}</span><br/>` +
-      (flagged
-        ? `<span class="tip-num" style="color:#ec7700;font-weight:600">FLAGGED — crosses active cone</span>`
-        : `<span style="color:#9a9a9a">clear</span>`),
-      { sticky: true, className: "hh-tip" }
-    );
-
-    // Destination dot (small, unbranded)
-    const dest = lane.waypoints[lane.waypoints.length - 1];
-    L.circleMarker(dest, {
-      radius: 3.5, color: hex, weight: 1.8, fillColor: "#fff", fillOpacity: 1,
-    }).addTo(lanesLayer);
-
-    // Callout box anchored at the origin
-    const origin = lane.waypoints[0];
-    const status = flagged ? "Flagged" : (isSel ? "Selected" : lane.ports);
-    const cls = "lane-label" + (flagged ? " flagged" : "") + (isSel ? " selected" : "");
-    const html =
-      `<div class="${cls}">` +
-        `<span class="dot"></span>` +
-        `<span class="name">${lane.name}</span>` +
-        `<span class="metric">${status}</span>` +
-      `</div>`;
-    const icon = L.divIcon({
-      className: "lane-label-wrap",
-      html,
-      iconSize: null,
-      iconAnchor: [0, 0],
-    });
-    const marker = L.marker(origin, { icon, riseOnHover: true });
-    marker.on("click", () => selectLane(lane.id));
-    marker.addTo(laneLabelsLayer);
-
-    // Sidebar row
     const row = document.createElement("div");
     row.className = "lane" + (flagged ? " flagged" : "") + (isSel ? " selected" : "");
     row.dataset.id = lane.id;
     row.innerHTML = `
       <span class="name">${lane.name}</span>
-      <span class="status">${flagged ? "Flagged" : (isSel ? "Selected" : "Clear")}</span>
+      <span class="status">${flagged ? "Flagged" : (isSel ? "Showing" : "Clear")}</span>
       <span class="ports">${lane.ports}</span>
     `;
     row.addEventListener("click", () => selectLane(lane.id));
     listEl.appendChild(row);
   });
+
+  // Map render — ONLY the selected lane is drawn. Click an alert above.
+  if (!selectedLaneId) return;
+  const lane = LANES.find(l => l.id === selectedLaneId);
+  if (!lane) return;
+  const flagged = isLaneFlagged(lane);
+
+  const poly = L.polyline(lane.waypoints, {
+    color: "#ec7700",
+    weight: 4,
+    opacity: 0.95,
+  }).addTo(lanesLayer);
+  poly.bindTooltip(
+    `<span class="tip-title">${lane.name}</span>` +
+    `<span>${lane.ports}</span><br/>` +
+    (flagged
+      ? `<span class="tip-num" style="color:#ec7700;font-weight:600">FLAGGED — crosses active cone</span>`
+      : `<span style="color:#9a9a9a">clear</span>`),
+    { sticky: true, className: "hh-tip" }
+  );
+  poly.on("click", () => selectLane(lane.id));
+
+  // Destination dot
+  const dest = lane.waypoints[lane.waypoints.length - 1];
+  L.circleMarker(dest, {
+    radius: 4, color: "#ec7700", weight: 2, fillColor: "#fff", fillOpacity: 1,
+  }).addTo(lanesLayer);
+
+  // Callout box anchored at the origin
+  const origin = lane.waypoints[0];
+  const status = flagged ? "Flagged" : lane.ports;
+  const cls = "lane-label selected" + (flagged ? " flagged" : "");
+  const html =
+    `<div class="${cls}">` +
+      `<span class="dot"></span>` +
+      `<span class="name">${lane.name}</span>` +
+      `<span class="metric">${status}</span>` +
+    `</div>`;
+  const icon = L.divIcon({
+    className: "lane-label-wrap",
+    html,
+    iconSize: null,
+    iconAnchor: [0, 0],
+  });
+  L.marker(origin, { icon, riseOnHover: true })
+   .on("click", () => selectLane(lane.id))
+   .addTo(laneLabelsLayer);
 }
 
 function selectLane(id) {
