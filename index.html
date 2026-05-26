@@ -218,12 +218,12 @@
 
 <header>
   <h1>Hurricane Heatmap</h1>
-  <span class="sub">US + Mexico refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
+  <span class="sub">Refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
   <span class="badge" id="live-badge">Live</span>
 </header>
 
 <main>
-  <div id="map" aria-label="US and Mexico hurricane risk map"></div>
+  <div id="map" aria-label="US hurricane risk map"></div>
 
   <aside>
     <section>
@@ -246,9 +246,8 @@
       <h2>What this means</h2>
       <p style="font-size:12px;color:#444;">
         Each labeled region is shaded by the <strong>average</strong> Jul–Sep
-        Atlantic tropical-cyclone exposure of its member states (1851–present,
-        HURDAT2, ≤150 km of the state). Mexico is shown with placeholder
-        seed scores while a Pacific-basin counterpart of HURDAT2 is wired in.
+        Atlantic tropical-cyclone exposure of its member states
+        (1851–present, HURDAT2, ≤150 km of the state).
       </p>
       <p style="font-size:12px;color:#444;">
         Live NHC forecast cones are drawn on top. A reefer lane is
@@ -263,8 +262,8 @@
         <div class="empty">Polling NOAA NHC…</div>
       </div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
-        Re-polls every 5 min. The NHC feed already covers Mexico, the Gulf,
-        and the Caribbean.
+        Re-polls every 5 min. The NHC feed covers the Atlantic, Gulf, and
+        Caribbean basins.
       </div>
     </section>
 
@@ -277,8 +276,7 @@
     </section>
 
     <div class="footnote">
-      US scores come from HURDAT2 (<code class="inline">state_risk.json</code>).
-      Mexican scores are seed values pending a Pacific best-track import.
+      State scores come from HURDAT2 (<code class="inline">state_risk.json</code>).
       CORS on the NHC service may fail in some browsers — see README.
     </div>
   </aside>
@@ -336,28 +334,6 @@ const LANES = [
       [30.6954, -88.0399], [33.5186, -86.8104], [36.1627, -86.7816],
     ],
   },
-  // ---- Cross-border lanes ----
-  {
-    id: "LRD-MTY",
-    name: "Laredo → Monterrey",
-    ports: "Cross-border reefer · Mex-Hwy 85",
-    waypoints: [
-      [27.5306, -99.4803],  // Laredo, TX
-      [27.4767, -99.5160],  // Nuevo Laredo, MX
-      [25.6866, -100.3161], // Monterrey, MX
-    ],
-  },
-  {
-    id: "PHR-VER",
-    name: "Pharr → Veracruz",
-    ports: "Produce / cold-chain · Mex-Hwy 180",
-    waypoints: [
-      [26.1948, -98.1836],  // Pharr/McAllen, TX
-      [25.8694, -97.5072],  // Matamoros, MX
-      [22.2331, -97.8611],  // Tampico, MX
-      [19.1738, -96.1342],  // Veracruz, MX
-    ],
-  },
 ];
 
 /**
@@ -380,108 +356,32 @@ const STATE_RISK_SEED = {
 };
 
 /**
- * MX_STATE_RISK_SEED — placeholder Jul–Sep exposure scores for Mexican
- * states, on the same 0..1 scale as US scores.  These are seeded by
- * regional pattern, NOT computed from a best-track dataset.
- *
- * PATTERN:
- *   Gulf/Caribbean coast (Veracruz, Tamaulipas, Tabasco, Yucatán
- *     peninsula) — HIGH (Atlantic basin storms).
- *   NE Mexico interior near the Texas border — MODERATE (remnants of
- *     landfalling Atlantic systems).
- *   Pacific coast — MODERATE (separate East-Pacific season; counted
- *     here for completeness even though HURDAT2 is Atlantic-only).
- *   Interior central Mexico — LOW.
- *
- * TO REPLACE WITH REAL DATA:
- *   1. Pull NOAA HURDAT2 Atlantic best-track (already used) for Gulf /
- *      Yucatán / NE-Mexico exposure.
- *   2. Pull the East-Pacific HURDAT2 file from
- *        https://www.nhc.noaa.gov/data/hurdat/   (filename pattern
- *        `hurdat2-nepac-1949-YYYY-*.txt`) for Pacific-coast exposure.
- *   3. Run a script parallel to `scripts/build-state-risk.js` against
- *      Mexican state polygons (datamaps `mex.topo.json` IDs `MX.XX`)
- *      and emit a `mx_state_risk.json` with the same shape.
- *   4. Drop the resulting `{ "MX.VE": 0.97, ... }` table in below or
- *      load it alongside the US JSON.
- *
- * Keys are the datamaps TopoJSON IDs (`MX.XX`).
- */
-const MX_STATE_RISK_SEED = {
-  // GULF MX — Atlantic-facing, highest
-  "MX.VE": 0.95,  // Veracruz
-  "MX.TM": 0.92,  // Tamaulipas
-  "MX.TB": 0.88,  // Tabasco
-  // YUCATAN — Caribbean / Gulf, highest
-  "MX.YU": 0.90,  // Yucatán
-  "MX.QR": 0.95,  // Quintana Roo
-  "MX.CM": 0.85,  // Campeche
-  // NE MX — moderate, Texas-border interior
-  "MX.NL": 0.50,  // Nuevo León
-  "MX.CA": 0.45,  // Coahuila
-  // PACIFIC MX — separate East-Pacific season, moderate
-  "MX.SI": 0.55,  // Sinaloa
-  "MX.SO": 0.40,  // Sonora
-  "MX.BS": 0.50,  // Baja California Sur
-  "MX.JA": 0.45,  // Jalisco
-  "MX.GR": 0.55,  // Guerrero
-  "MX.OA": 0.50,  // Oaxaca
-  "MX.CP": 0.50,  // Chiapas
-  "MX.MC": 0.45,  // Michoacán
-  "MX.CL": 0.50,  // Colima
-  "MX.NA": 0.50,  // Nayarit
-  // CENTRAL MX — interior, low
-  "MX.AG": 0.15,  // Aguascalientes
-  "MX.BN": 0.15,  // Baja California (north)
-  "MX.CH": 0.15,  // Chihuahua
-  "MX.DF": 0.18,  // Distrito Federal / CDMX
-  "MX.DU": 0.18,  // Durango
-  "MX.GJ": 0.18,  // Guanajuato
-  "MX.HI": 0.20,  // Hidalgo
-  "MX.MX": 0.18,  // México (state)
-  "MX.MR": 0.20,  // Morelos
-  "MX.PU": 0.22,  // Puebla
-  "MX.QE": 0.18,  // Querétaro
-  "MX.SL": 0.20,  // San Luis Potosí
-  "MX.TL": 0.18,  // Tlaxcala
-  "MX.ZA": 0.15,  // Zacatecas
-};
-
-/**
  * Region definitions.  Each region:
  *   - is shaded by the AVERAGE risk score of its member states
  *   - gets one centered label callout (anchored at `label`)
  *   - states not listed in any region render as neutral grayscale.
  *
- * Keys: US uses USPS codes; MX uses `MX.XX` datamaps IDs.
+ * Keys are USPS codes.
  */
 const REGIONS = [
-  // US
-  { name: "PNW",         country: "US", label: [44.5, -118.5], states: ["WA","OR","ID"] },
-  { name: "CALIF",       country: "US", label: [37.0, -119.5], states: ["CA"] },
-  { name: "ARIZ",        country: "US", label: [34.2, -111.7], states: ["AZ"] },
-  { name: "COLO",        country: "US", label: [39.0, -113.0], states: ["CO","UT","NV"] },
-  { name: "TEXAS",       country: "US", label: [32.0, -100.0], states: ["TX","OK","NM"] },
-  { name: "GREAT LAKES", country: "US", label: [42.5,  -88.0], states: ["MN","WI","MI","IL","IN","OH"] },
-  { name: "SE",          country: "US", label: [33.6,  -88.0], states: ["LA","MS","AL","GA","TN","KY","AR"] },
-  { name: "FLA",         country: "US", label: [28.6,  -82.0], states: ["FL"] },
-  { name: "MID-ATL",     country: "US", label: [36.6,  -79.0], states: ["VA","WV","MD","DE","NC","SC"] },
-  { name: "NY",          country: "US", label: [41.2,  -77.5], states: ["NY","PA","NJ"] },
-  { name: "NEW ENGLAND", country: "US", label: [44.5,  -71.0], states: ["ME","NH","VT","MA","CT","RI"] },
-  // MX
-  { name: "GULF MX",     country: "MX", label: [21.0,  -97.0], states: ["MX.VE","MX.TM","MX.TB"] },
-  { name: "YUCATAN",     country: "MX", label: [20.2,  -88.7], states: ["MX.YU","MX.QR","MX.CM"] },
-  { name: "NE MX",       country: "MX", label: [26.5, -101.2], states: ["MX.NL","MX.CA"] },
-  { name: "PACIFIC MX",  country: "MX", label: [21.5, -104.5], states: ["MX.SI","MX.SO","MX.BS","MX.JA","MX.GR","MX.OA","MX.CP","MX.MC","MX.CL","MX.NA"] },
-  { name: "CENTRAL MX",  country: "MX", label: [23.0, -102.0], states: ["MX.AG","MX.BN","MX.CH","MX.DF","MX.DU","MX.GJ","MX.HI","MX.MX","MX.MR","MX.PU","MX.QE","MX.SL","MX.TL","MX.ZA"] },
+  { name: "PNW",         label: [44.5, -118.5], states: ["WA","OR","ID"] },
+  { name: "CALIF",       label: [37.0, -119.5], states: ["CA"] },
+  { name: "ARIZ",        label: [34.2, -111.7], states: ["AZ"] },
+  { name: "COLO",        label: [39.0, -113.0], states: ["CO","UT","NV"] },
+  { name: "TEXAS",       label: [32.0, -100.0], states: ["TX","OK","NM"] },
+  { name: "GREAT LAKES", label: [42.5,  -88.0], states: ["MN","WI","MI","IL","IN","OH"] },
+  { name: "SE",          label: [33.6,  -88.0], states: ["LA","MS","AL","GA","TN","KY","AR"] },
+  { name: "FLA",         label: [28.6,  -82.0], states: ["FL"] },
+  { name: "MID-ATL",     label: [36.6,  -79.0], states: ["VA","WV","MD","DE","NC","SC"] },
+  { name: "NY",          label: [41.2,  -77.5], states: ["NY","PA","NJ"] },
+  { name: "NEW ENGLAND", label: [44.5,  -71.0], states: ["ME","NH","VT","MA","CT","RI"] },
 ];
 
 const NHC_POLL_MS = 5 * 60 * 1000;
 const US_TOPOJSON    = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
-const MX_TOPOJSON    = "https://cdn.jsdelivr.net/gh/markmarkoh/datamaps@master/src/js/data/mex.topo.json";
 const STATE_RISK_JSON = "state_risk.json";
 
-let STATE_RISK = { ...STATE_RISK_SEED, ...MX_STATE_RISK_SEED };
+let STATE_RISK = { ...STATE_RISK_SEED };
 let STATE_RISK_META = null;
 
 /* =========================================================================
@@ -584,7 +484,6 @@ let selectedLaneId = null;
 async function startApp() {
   document.getElementById("loader").classList.add("hidden");
 
-  // Center on US + Mexico — Texas-ish anchor, zoom to fit
   map = L.map("map", {
     zoomControl: true,
     attributionControl: true,
@@ -595,10 +494,10 @@ async function startApp() {
   });
   // No tile layer — clean editorial canvas (#fafafa).
   map.attributionControl.addAttribution(
-    'US: us-atlas · MX: datamaps · cones: NOAA NHC · risk: HURDAT2'
+    'geometry: us-atlas · cones: NOAA NHC · risk: HURDAT2'
   );
-  // Fit to US + Mexico bounding box
-  map.fitBounds([[14.5, -125], [49.5, -66.5]], { padding: [10, 10] });
+  // Fit to CONUS
+  map.fitBounds([[24.5, -125], [49.5, -66.5]], { padding: [10, 10] });
 
   await loadStateRisk();
   await drawStatesHeatmap();
@@ -614,8 +513,7 @@ async function loadStateRisk() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
     if (data && data.scores) {
-      // Layer HURDAT2 US scores on top of seeds (US + MX seeds remain for MX states)
-      STATE_RISK = { ...STATE_RISK_SEED, ...MX_STATE_RISK_SEED, ...data.scores };
+      STATE_RISK = { ...STATE_RISK_SEED, ...data.scores };
       STATE_RISK_META = data;
       renderRiskMeta(data);
     }
@@ -629,14 +527,14 @@ function renderRiskMeta(meta) {
   const el = document.getElementById("risk-meta");
   if (!el) return;
   if (!meta) {
-    el.innerHTML = '<span style="color:var(--neutral-text)">US: seed fallback (no <code class="inline">state_risk.json</code>) · MX: seed only.</span>';
+    el.innerHTML = '<span style="color:var(--neutral-text)">Using fallback seed table — run <code class="inline">scripts/build-state-risk.js</code> to generate <code class="inline">state_risk.json</code>.</span>';
     return;
   }
   const gen = meta.generated_at ? new Date(meta.generated_at).toISOString().slice(0, 10) : "?";
   const src = (meta.source_url || "").split("/").pop();
   el.innerHTML =
-    `<span class="num">US: HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km · gen ${gen}</span><br/>` +
-    `<span style="color:var(--neutral-text)">MX: placeholder seed pending East-Pacific best-track import</span>`;
+    `<span class="num">HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km buffer · Jul–Sep · generated ${gen}</span><br/>` +
+    `<span style="color:var(--neutral-text)">source: ${src}</span>`;
 }
 
 /* ----- States heatmap (US + MX, shaded by REGION average) --------------- */
@@ -648,38 +546,21 @@ async function fetchJSON(url) {
 }
 
 async function drawStatesHeatmap() {
-  // Fetch both sources in parallel.
-  let usTopo = null, mxTopo = null;
-  try { usTopo = await fetchJSON(US_TOPOJSON); } catch (e) { console.warn("us-atlas failed:", e); }
-  try { mxTopo = await fetchJSON(MX_TOPOJSON); } catch (e) { console.warn("mex topo failed:", e); }
+  let usTopo;
+  try { usTopo = await fetchJSON(US_TOPOJSON); }
+  catch (e) { console.warn("us-atlas failed:", e); return; }
 
   const features = [];
-
-  if (usTopo) {
-    const fc = topojson.feature(usTopo, usTopo.objects.states);
-    for (const f of fc.features) {
-      const usps = STATE_FIPS_TO_USPS[String(f.id).padStart(2, "0")];
-      if (!usps) continue;
-      if (usps === "AK" || usps === "HI") continue; // not on this map
-      f.properties = { ...(f.properties || {}), _key: usps, _country: "US", _name: f.properties?.name || usps };
-      features.push(f);
-    }
-  }
-  if (mxTopo) {
-    const objKey = Object.keys(mxTopo.objects)[0];
-    const fc = topojson.feature(mxTopo, mxTopo.objects[objKey]);
-    for (const f of fc.features) {
-      const id = f.id;
-      const name = f.properties && f.properties.name;
-      if (!id || !name || name === "null") continue;
-      f.properties = { ...(f.properties || {}), _key: id, _country: "MX", _name: name };
-      features.push(f);
-    }
+  const fc = topojson.feature(usTopo, usTopo.objects.states);
+  for (const f of fc.features) {
+    const usps = STATE_FIPS_TO_USPS[String(f.id).padStart(2, "0")];
+    if (!usps) continue;
+    if (usps === "AK" || usps === "HI") continue;
+    f.properties = { ...(f.properties || {}), _key: usps, _name: f.properties?.name || usps };
+    features.push(f);
   }
 
-  const collection = { type: "FeatureCollection", features };
-
-  statesLayer = L.geoJSON(collection, {
+  statesLayer = L.geoJSON({ type: "FeatureCollection", features }, {
     style: styleFeature,
     onEachFeature: bindFeatureTooltip,
   }).addTo(map);
