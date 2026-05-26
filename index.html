@@ -182,6 +182,7 @@
       </div>
       <div class="legend"><div class="ends" style="flex:1"><span>Low</span><span class="num">Jul–Sep storm exposure</span><span>High</span></div></div>
       <div class="legend"><div class="neutral-row"><span class="sw"></span><span>No / minimal data</span></div></div>
+      <div id="risk-meta" style="font-size:11px;color:#555;margin-top:8px;line-height:1.5;"></div>
     </section>
 
     <section>
@@ -280,20 +281,15 @@ const LANES = [
 ];
 
 /**
- * STATE_RISK_SEED — placeholder Jul–Sep tropical-cyclone exposure score
- * per US state, on a 0..1 scale.  These are illustrative.
+ * STATE_RISK_SEED — fallback only.
  *
- * TO REPLACE WITH REAL DATA (NOAA HURDAT2):
- *   1. Download HURDAT2 Atlantic best-track CSV:
- *        https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt
- *   2. Parse storm-tracks; keep only points in months 7,8,9 (Jul–Sep).
- *   3. For each US state polygon, count how many distinct storm IDs have a
- *      track point within ~150 km of the polygon (or intersect a buffered
- *      state shape).
- *   4. Normalize counts by the historical max to a 0..1 score and emit a
- *      { "FL": 1.00, "LA": 0.93, ... } table to drop in below.
- *   5. The same pipeline (with a date window) feeds a near-real-time variant
- *      from the NHC active-storm REST feed used for cones.
+ * The dashboard tries to fetch `state_risk.json` (HURDAT2-derived counts,
+ * built by `scripts/build-state-risk.js`) and uses that when available.
+ * This hard-coded table is only used if the JSON fetch fails (e.g. opening
+ * the page from `file://` without the JSON sibling present).
+ *
+ * To regenerate `state_risk.json` from current NOAA HURDAT2:
+ *     cd scripts && npm install && npm run build
  */
 const STATE_RISK_SEED = {
   // Gulf Coast & Florida — highest
@@ -317,6 +313,11 @@ const STATE_RISK_SEED = {
 
 const NHC_POLL_MS = 5 * 60 * 1000;     // 5 min
 const STATE_TOPOJSON = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
+const STATE_RISK_JSON = "state_risk.json"; // HURDAT2-derived, built by scripts/build-state-risk.js
+
+// Live risk table — filled from state_risk.json at boot, falls back to STATE_RISK_SEED.
+let STATE_RISK = { ...STATE_RISK_SEED };
+let STATE_RISK_META = null; // { generated_at, source_url, max_count, ... }
 
 /* =========================================================================
  *  LIB LOADER — Leaflet & Turf with unpkg → jsdelivr → cdnjs fallback.
@@ -421,10 +422,41 @@ async function startApp() {
     subdomains: "abcd",
   }).addTo(map);
 
+  await loadStateRisk();
   await drawStatesHeatmap();
   drawLanes();
   await refreshCones();
   setInterval(refreshCones, NHC_POLL_MS);
+}
+
+async function loadStateRisk() {
+  try {
+    const r = await fetch(STATE_RISK_JSON, { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const data = await r.json();
+    if (data && data.scores) {
+      STATE_RISK = data.scores;
+      STATE_RISK_META = data;
+      renderRiskMeta(data);
+    }
+  } catch (e) {
+    console.warn("state_risk.json not available; using fallback seed table.", e);
+    renderRiskMeta(null);
+  }
+}
+
+function renderRiskMeta(meta) {
+  const el = document.getElementById("risk-meta");
+  if (!el) return;
+  if (!meta) {
+    el.innerHTML = '<span style="color:var(--neutral-text)">Using fallback seed table — run <code class="inline">scripts/build-state-risk.js</code> to generate <code class="inline">state_risk.json</code>.</span>';
+    return;
+  }
+  const gen = meta.generated_at ? new Date(meta.generated_at).toISOString().slice(0, 10) : "?";
+  const src = (meta.source_url || "").split("/").pop();
+  el.innerHTML =
+    `<span class="num">HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km buffer · Jul–Sep · generated ${gen}</span><br/>` +
+    `<span style="color:var(--neutral-text)">source: ${src}</span>`;
 }
 
 /* ----- States heatmap ---------------------------------------------------- */
@@ -442,7 +474,7 @@ async function drawStatesHeatmap() {
   statesLayer = L.geoJSON(geo, {
     style: (feat) => {
       const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
-      const score = STATE_RISK_SEED[usps];
+      const score = STATE_RISK[usps];
       const fill = rampColor(score);
       return fill
         ? { fillColor: fill, fillOpacity: 0.82, color: "#fff", weight: 0.6 }
@@ -450,7 +482,7 @@ async function drawStatesHeatmap() {
     },
     onEachFeature: (feat, layer) => {
       const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
-      const score = STATE_RISK_SEED[usps];
+      const score = STATE_RISK[usps];
       const tipName = feat.properties && feat.properties.name ? feat.properties.name : usps;
       const tipScore = (score == null)
         ? '<span class="tip-num" style="color:#9a9a9a">no data</span>'

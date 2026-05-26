@@ -16,20 +16,43 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full design system (typography, color ram
 
 | Layer                  | Source                                                                                                | Notes                                                                                                                                                                                  |
 |------------------------|--------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| State risk heatmap     | **NOAA HURDAT2** (Atlantic best-track database)                                                       | The seed table in `index.html` (`STATE_RISK_SEED`) is a placeholder. Replace it with counts derived from HURDAT2 Jul–Sep tracks intersecting / buffered against each state polygon.    |
+| State risk heatmap     | **NOAA HURDAT2** (Atlantic best-track database)                                                       | Real counts derived by `scripts/build-state-risk.js` and committed as `state_risk.json` — the dashboard fetches that at boot. Falls back to an in-file seed table if the JSON is missing. |
 | Active forecast cones  | **NOAA NHC** tropical REST service at `mapservices.weather.noaa.gov`, layer `4` of `NHC_tropical_weather` | Returns active Atlantic storms' forecast-cone polygons as GeoJSON. Polled every 5 minutes.                                                                                             |
 | US state geometry      | `us-atlas` TopoJSON via jsDelivr (`states-10m.json`)                                                  | Decoded with `topojson-client`.                                                                                                                                                        |
 | Basemap tiles          | CARTO `light_all`                                                                                     | Free positron-style tiles; OpenStreetMap attribution preserved.                                                                                                                        |
 
-### Replacing the risk seed with real HURDAT2 data
+### Regenerating `state_risk.json` from HURDAT2
 
-A documentation block above `STATE_RISK_SEED` in `index.html` walks through the pipeline:
+The repo ships with `state_risk.json` already built (committed). To refresh it from the latest HURDAT2:
 
-1. Download the HURDAT2 Atlantic best-track file from NHC.
-2. Filter track points to months **7, 8, 9** (Jul–Sep).
-3. For each US state polygon, count distinct storm IDs whose tracks pass within ~150 km of the polygon (or intersect a buffered state shape).
-4. Normalize counts to a 0..1 score against the historical max.
-5. Drop the resulting `{ "FL": 1.00, "LA": 0.95, ... }` table into the file.
+```sh
+cd scripts
+npm install
+npm run build
+```
+
+The script (`scripts/build-state-risk.js`):
+
+1. Scrapes `https://www.nhc.noaa.gov/data/hurdat/` for the most recent `hurdat2-1851-YYYY-*.txt` Atlantic file.
+2. Parses the HURDAT2 multi-line format; keeps points in months **7, 8, 9** with tropical/subtropical status (`HU`, `TS`, `TD`, `SS`, `SD`).
+3. Loads `us-atlas` `states-10m.json`, buffers each state polygon by **150 km** with `turf.buffer`.
+4. For every track point, tests which buffered states contain it (bbox prefilter for speed) and records `(state, storm_id)` pairs.
+5. Counts distinct storm IDs per state, normalizes by the historical max, and writes `state_risk.json` with `{ generated_at, source_url, buffer_km, months, statuses, max_count, counts, scores }`.
+
+Current snapshot top-10 (Atlantic, 1851–2025, Jul–Sep, ≤150 km from state):
+
+| State | Distinct storms | Normalized score |
+|-------|----------------:|-----------------:|
+| FL    | 244             | 1.000            |
+| NC    | 195             | 0.799            |
+| LA    | 178             | 0.730            |
+| GA    | 163             | 0.668            |
+| SC    | 153             | 0.627            |
+| TX    | 149             | 0.611            |
+| AL    | 147             | 0.602            |
+| MS    | 137             | 0.561            |
+| VA    | 129             | 0.529            |
+| MD    | 79              | 0.324            |
 
 ## CORS caveat
 

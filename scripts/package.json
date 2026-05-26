@@ -1,0 +1,13 @@
+{
+  "name": "hurricane-heatmap-build",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Build helper: parse HURDAT2, compute per-state Jul-Sep storm counts, emit state_risk.json",
+  "scripts": {
+    "build": "node build-state-risk.js"
+  },
+  "dependencies": {
+    "@turf/turf": "^6.5.0",
+    "topojson-client": "^3.1.0"
+  }
+}
