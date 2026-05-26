@@ -12,13 +12,13 @@
 <style>
   /* ----- Design system tokens (mirrors CLAUDE.md) ----- */
   :root {
-    --ramp-0: #e8f1de;   /* low tint */
-    --ramp-1: #9cc176;   /* low-mid (interpolated) */
-    --ramp-2: #4a8b2c;   /* mid (Olive Drab)       */
-    --ramp-3: #1d3711;   /* high                    */
-    --ramp-4: #16290d;   /* highest                 */
+    --ramp-0: #e8f1de;
+    --ramp-1: #9cc176;
+    --ramp-2: #4a8b2c;
+    --ramp-3: #1d3711;
+    --ramp-4: #16290d;
 
-    --accent: #ec7700;   /* Mango Tango — selected/active only */
+    --accent: #ec7700;
 
     --neutral-fill:   #f4f4f4;
     --neutral-border: #e5e5e5;
@@ -37,7 +37,7 @@
   }
   h1, h2, h3 { font-family: "Montserrat", system-ui, sans-serif; margin: 0; }
   h1 { font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
-  h2 { font-weight: 600; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; color: #444; }
+  h2 { font-weight: 600; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; color: #444; }
   h3 { font-weight: 500; font-size: 13px; color: #666; }
 
   .num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
@@ -65,7 +65,14 @@
   }
   @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
 
-  #map { width: 100%; height: 100%; min-height: 480px; background: #fff; }
+  #map { width: 100%; height: 100%; min-height: 480px; background: var(--canvas); }
+  /* Editorial canvas — no tiles, plain background */
+  .leaflet-container { background: var(--canvas) !important; outline: none; font-family: "Open Sans", sans-serif; }
+  .leaflet-control-attribution {
+    background: rgba(255,255,255,0.85) !important;
+    color: #888 !important;
+    font-size: 10px !important;
+  }
 
   aside {
     border-left: 1px solid var(--neutral-border);
@@ -74,6 +81,7 @@
     padding: 16px 18px 24px;
   }
   aside section + section { margin-top: 22px; }
+  aside p { margin: 0 0 8px; }
 
   .legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .legend .swatches { display: flex; flex: 1; height: 12px; border-radius: 2px; overflow: hidden; }
@@ -125,7 +133,58 @@
   }
   .loader.hidden { display: none; }
 
-  /* Leaflet tooltip override → design-system tooltip */
+  /* ----- Map callout boxes ----------------------------------------------- */
+
+  /* Region label — small white pill centered on each region */
+  .region-label-wrap { pointer-events: none; }
+  .region-label {
+    display: inline-block;
+    background: #fff;
+    border: 1px solid var(--neutral-border);
+    border-radius: 14px;
+    padding: 3px 10px;
+    font-family: "Open Sans", sans-serif;
+    font-weight: 600;
+    font-size: 11px;
+    color: var(--ink);
+    letter-spacing: 0.07em;
+    white-space: nowrap;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transform: translate(-50%, -50%);
+  }
+
+  /* Lane callout — white pill anchored at the lane origin */
+  .lane-label-wrap { pointer-events: auto; cursor: pointer; }
+  .lane-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid var(--neutral-border);
+    border-radius: 14px;
+    padding: 5px 12px 5px 8px;
+    font-family: "Open Sans", sans-serif;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+    transform: translate(10px, -50%);
+    white-space: nowrap;
+  }
+  .lane-label .dot {
+    width: 9px; height: 9px; border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--accent);
+    flex: 0 0 auto;
+  }
+  .lane-label .name { font-weight: 600; font-size: 11px; color: var(--ink); }
+  .lane-label .metric {
+    font-size: 10px; color: #666;
+    margin-left: 4px;
+    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+  }
+  .lane-label.flagged { border-color: var(--accent); border-width: 1.5px; padding: 4px 11px 4px 7px; }
+  .lane-label.flagged .metric { color: var(--accent); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .lane-label.selected { background: #fff6ee; border-color: var(--accent); }
+
+  /* Leaflet tooltip → design-system style */
   .leaflet-tooltip.hh-tip {
     background: var(--ink);
     color: #fff;
@@ -150,8 +209,6 @@
   code.inline { background: #f4f4f4; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
 </style>
 
-<!-- Leaflet CSS — try unpkg first; <noscript> not needed for stylesheet fallback,
-     we add fallback <link> elements via JS if the first fails to apply. -->
 <link id="leaflet-css" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
 </head>
 
@@ -161,12 +218,12 @@
 
 <header>
   <h1>Hurricane Heatmap</h1>
-  <span class="sub">Refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
+  <span class="sub">US + Mexico refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
   <span class="badge" id="live-badge">Live</span>
 </header>
 
 <main>
-  <div id="map" aria-label="US hurricane risk map"></div>
+  <div id="map" aria-label="US and Mexico hurricane risk map"></div>
 
   <aside>
     <section>
@@ -180,9 +237,24 @@
           <span style="background:#16290d"></span>
         </div>
       </div>
-      <div class="legend"><div class="ends" style="flex:1"><span>Low</span><span class="num">Jul–Sep storm exposure</span><span>High</span></div></div>
-      <div class="legend"><div class="neutral-row"><span class="sw"></span><span>No / minimal data</span></div></div>
+      <div class="legend"><div class="ends" style="flex:1"><span>Low</span><span class="num">Region avg · Jul–Sep exposure</span><span>High</span></div></div>
+      <div class="legend"><div class="neutral-row"><span class="sw"></span><span>Not in a region · neutral</span></div></div>
       <div id="risk-meta" style="font-size:11px;color:#555;margin-top:8px;line-height:1.5;"></div>
+    </section>
+
+    <section>
+      <h2>What this means</h2>
+      <p style="font-size:12px;color:#444;">
+        Each labeled region is shaded by the <strong>average</strong> Jul–Sep
+        Atlantic tropical-cyclone exposure of its member states (1851–present,
+        HURDAT2, ≤150 km of the state). Mexico is shown with placeholder
+        seed scores while a Pacific-basin counterpart of HURDAT2 is wired in.
+      </p>
+      <p style="font-size:12px;color:#444;">
+        Live NHC forecast cones are drawn on top. A reefer lane is
+        <strong style="color:var(--accent)">flagged</strong> when its path
+        crosses any active cone polygon (turf.js intersect).
+      </p>
     </section>
 
     <section>
@@ -191,8 +263,8 @@
         <div class="empty">Polling NOAA NHC…</div>
       </div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
-        Re-polls every 5 min. Active cone outline uses the
-        <span style="color:var(--accent);font-weight:600;">accent color</span>.
+        Re-polls every 5 min. The NHC feed already covers Mexico, the Gulf,
+        and the Caribbean.
       </div>
     </section>
 
@@ -200,28 +272,28 @@
       <h2>Reefer lane alerts</h2>
       <div id="lanes-list"></div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
-        A lane is flagged when its path crosses any active NHC cone polygon
-        (turf.js intersect). Click a lane to focus the map.
+        Click a lane (here or on the map) to focus it.
       </div>
     </section>
 
     <div class="footnote">
-      Risk seed is a placeholder; replace <code class="inline">STATE_RISK_SEED</code>
-      with HURDAT2-derived counts. CORS on the NHC service may fail in some browsers;
-      see README.
+      US scores come from HURDAT2 (<code class="inline">state_risk.json</code>).
+      Mexican scores are seed values pending a Pacific best-track import.
+      CORS on the NHC service may fail in some browsers — see README.
     </div>
   </aside>
 </main>
 
 <script>
 /* =========================================================================
- *  CONFIG — edit lanes and risk seed here.
+ *  CONFIG — edit lanes, risk seeds, and regions here.
  * ========================================================================= */
 
 /**
  * Reefer lanes — origin/destination plus optional waypoints, in [lat, lng].
  * Add/remove freely. Each lane's path is rendered as a polyline; turf checks
  * its line-string against each active NHC cone polygon for intersection.
+ * The first waypoint anchors the callout box.
  */
 const LANES = [
   {
@@ -229,10 +301,7 @@ const LANES = [
     name: "Miami → Atlanta",
     ports: "Reefer produce · I-95 / I-75",
     waypoints: [
-      [25.7617, -80.1918],  // Miami, FL
-      [27.9506, -82.4572],  // Tampa, FL
-      [30.3322, -81.6557],  // Jacksonville, FL
-      [33.7490, -84.3880],  // Atlanta, GA
+      [25.7617, -80.1918], [27.9506, -82.4572], [30.3322, -81.6557], [33.7490, -84.3880],
     ],
   },
   {
@@ -240,10 +309,7 @@ const LANES = [
     name: "Houston → Memphis",
     ports: "Gulf protein · I-45 / I-40",
     waypoints: [
-      [29.7604, -95.3698],  // Houston, TX
-      [30.4515, -91.1871],  // Baton Rouge, LA
-      [32.2988, -90.1848],  // Jackson, MS
-      [35.1495, -90.0490],  // Memphis, TN
+      [29.7604, -95.3698], [30.4515, -91.1871], [32.2988, -90.1848], [35.1495, -90.0490],
     ],
   },
   {
@@ -251,10 +317,7 @@ const LANES = [
     name: "New Orleans → Chicago",
     ports: "Seafood reefer · I-55",
     waypoints: [
-      [29.9511, -90.0715],  // New Orleans, LA
-      [32.2988, -90.1848],  // Jackson, MS
-      [38.6270, -90.1994],  // St. Louis, MO
-      [41.8781, -87.6298],  // Chicago, IL
+      [29.9511, -90.0715], [32.2988, -90.1848], [38.6270, -90.1994], [41.8781, -87.6298],
     ],
   },
   {
@@ -262,10 +325,7 @@ const LANES = [
     name: "Charleston → New York",
     ports: "East-coast reefer · I-95",
     waypoints: [
-      [32.7765, -79.9311],  // Charleston, SC
-      [34.2257, -77.9447],  // Wilmington, NC
-      [36.8508, -76.2859],  // Norfolk, VA
-      [40.7128, -74.0060],  // New York, NY
+      [32.7765, -79.9311], [34.2257, -77.9447], [36.8508, -76.2859], [40.7128, -74.0060],
     ],
   },
   {
@@ -273,55 +333,159 @@ const LANES = [
     name: "Mobile → Nashville",
     ports: "Gulf cold-chain · I-65",
     waypoints: [
-      [30.6954, -88.0399],  // Mobile, AL
-      [33.5186, -86.8104],  // Birmingham, AL
-      [36.1627, -86.7816],  // Nashville, TN
+      [30.6954, -88.0399], [33.5186, -86.8104], [36.1627, -86.7816],
+    ],
+  },
+  // ---- Cross-border lanes ----
+  {
+    id: "LRD-MTY",
+    name: "Laredo → Monterrey",
+    ports: "Cross-border reefer · Mex-Hwy 85",
+    waypoints: [
+      [27.5306, -99.4803],  // Laredo, TX
+      [27.4767, -99.5160],  // Nuevo Laredo, MX
+      [25.6866, -100.3161], // Monterrey, MX
+    ],
+  },
+  {
+    id: "PHR-VER",
+    name: "Pharr → Veracruz",
+    ports: "Produce / cold-chain · Mex-Hwy 180",
+    waypoints: [
+      [26.1948, -98.1836],  // Pharr/McAllen, TX
+      [25.8694, -97.5072],  // Matamoros, MX
+      [22.2331, -97.8611],  // Tampico, MX
+      [19.1738, -96.1342],  // Veracruz, MX
     ],
   },
 ];
 
 /**
- * STATE_RISK_SEED — fallback only.
+ * STATE_RISK_SEED — fallback for US scores only.  The dashboard prefers
+ * the HURDAT2-derived `state_risk.json` when available.
  *
- * The dashboard tries to fetch `state_risk.json` (HURDAT2-derived counts,
- * built by `scripts/build-state-risk.js`) and uses that when available.
- * This hard-coded table is only used if the JSON fetch fails (e.g. opening
- * the page from `file://` without the JSON sibling present).
- *
- * To regenerate `state_risk.json` from current NOAA HURDAT2:
+ * To regenerate `state_risk.json` from NOAA HURDAT2:
  *     cd scripts && npm install && npm run build
  */
 const STATE_RISK_SEED = {
-  // Gulf Coast & Florida — highest
   FL: 1.00, LA: 0.95, TX: 0.78, MS: 0.85, AL: 0.82,
-  // Southeast / Atlantic — high
   GA: 0.72, SC: 0.78, NC: 0.80, VA: 0.55,
-  // Mid-Atlantic / Northeast — moderate
   MD: 0.42, DE: 0.40, NJ: 0.45, NY: 0.42, CT: 0.38, RI: 0.36, MA: 0.42, NH: 0.30, ME: 0.30,
-  // Inland Southeast — moderate, decay with distance
   TN: 0.40, KY: 0.28, AR: 0.45, OK: 0.32, WV: 0.22, PA: 0.22,
-  // Lower interior — low
   MO: 0.22, IL: 0.18, IN: 0.16, OH: 0.16, KS: 0.18,
-  // Rest of CONUS — very low (Jul–Sep tropical-cyclone exposure ≈ 0)
   MI: 0.08, WI: 0.06, MN: 0.04, IA: 0.10, NE: 0.08, SD: 0.04, ND: 0.04,
   CO: 0.06, NM: 0.10, AZ: 0.12, UT: 0.04, NV: 0.04, ID: 0.02, MT: 0.02, WY: 0.02,
   WA: 0.02, OR: 0.02, CA: 0.06,
   VT: 0.18,
-  // States with no/minimal usable data → leave undefined → grayscale neutral fill.
-  // (HI, AK, PR not shown on CONUS basemap.)
 };
 
-const NHC_POLL_MS = 5 * 60 * 1000;     // 5 min
-const STATE_TOPOJSON = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
-const STATE_RISK_JSON = "state_risk.json"; // HURDAT2-derived, built by scripts/build-state-risk.js
+/**
+ * MX_STATE_RISK_SEED — placeholder Jul–Sep exposure scores for Mexican
+ * states, on the same 0..1 scale as US scores.  These are seeded by
+ * regional pattern, NOT computed from a best-track dataset.
+ *
+ * PATTERN:
+ *   Gulf/Caribbean coast (Veracruz, Tamaulipas, Tabasco, Yucatán
+ *     peninsula) — HIGH (Atlantic basin storms).
+ *   NE Mexico interior near the Texas border — MODERATE (remnants of
+ *     landfalling Atlantic systems).
+ *   Pacific coast — MODERATE (separate East-Pacific season; counted
+ *     here for completeness even though HURDAT2 is Atlantic-only).
+ *   Interior central Mexico — LOW.
+ *
+ * TO REPLACE WITH REAL DATA:
+ *   1. Pull NOAA HURDAT2 Atlantic best-track (already used) for Gulf /
+ *      Yucatán / NE-Mexico exposure.
+ *   2. Pull the East-Pacific HURDAT2 file from
+ *        https://www.nhc.noaa.gov/data/hurdat/   (filename pattern
+ *        `hurdat2-nepac-1949-YYYY-*.txt`) for Pacific-coast exposure.
+ *   3. Run a script parallel to `scripts/build-state-risk.js` against
+ *      Mexican state polygons (datamaps `mex.topo.json` IDs `MX.XX`)
+ *      and emit a `mx_state_risk.json` with the same shape.
+ *   4. Drop the resulting `{ "MX.VE": 0.97, ... }` table in below or
+ *      load it alongside the US JSON.
+ *
+ * Keys are the datamaps TopoJSON IDs (`MX.XX`).
+ */
+const MX_STATE_RISK_SEED = {
+  // GULF MX — Atlantic-facing, highest
+  "MX.VE": 0.95,  // Veracruz
+  "MX.TM": 0.92,  // Tamaulipas
+  "MX.TB": 0.88,  // Tabasco
+  // YUCATAN — Caribbean / Gulf, highest
+  "MX.YU": 0.90,  // Yucatán
+  "MX.QR": 0.95,  // Quintana Roo
+  "MX.CM": 0.85,  // Campeche
+  // NE MX — moderate, Texas-border interior
+  "MX.NL": 0.50,  // Nuevo León
+  "MX.CA": 0.45,  // Coahuila
+  // PACIFIC MX — separate East-Pacific season, moderate
+  "MX.SI": 0.55,  // Sinaloa
+  "MX.SO": 0.40,  // Sonora
+  "MX.BS": 0.50,  // Baja California Sur
+  "MX.JA": 0.45,  // Jalisco
+  "MX.GR": 0.55,  // Guerrero
+  "MX.OA": 0.50,  // Oaxaca
+  "MX.CP": 0.50,  // Chiapas
+  "MX.MC": 0.45,  // Michoacán
+  "MX.CL": 0.50,  // Colima
+  "MX.NA": 0.50,  // Nayarit
+  // CENTRAL MX — interior, low
+  "MX.AG": 0.15,  // Aguascalientes
+  "MX.BN": 0.15,  // Baja California (north)
+  "MX.CH": 0.15,  // Chihuahua
+  "MX.DF": 0.18,  // Distrito Federal / CDMX
+  "MX.DU": 0.18,  // Durango
+  "MX.GJ": 0.18,  // Guanajuato
+  "MX.HI": 0.20,  // Hidalgo
+  "MX.MX": 0.18,  // México (state)
+  "MX.MR": 0.20,  // Morelos
+  "MX.PU": 0.22,  // Puebla
+  "MX.QE": 0.18,  // Querétaro
+  "MX.SL": 0.20,  // San Luis Potosí
+  "MX.TL": 0.18,  // Tlaxcala
+  "MX.ZA": 0.15,  // Zacatecas
+};
 
-// Live risk table — filled from state_risk.json at boot, falls back to STATE_RISK_SEED.
-let STATE_RISK = { ...STATE_RISK_SEED };
-let STATE_RISK_META = null; // { generated_at, source_url, max_count, ... }
+/**
+ * Region definitions.  Each region:
+ *   - is shaded by the AVERAGE risk score of its member states
+ *   - gets one centered label callout (anchored at `label`)
+ *   - states not listed in any region render as neutral grayscale.
+ *
+ * Keys: US uses USPS codes; MX uses `MX.XX` datamaps IDs.
+ */
+const REGIONS = [
+  // US
+  { name: "PNW",         country: "US", label: [44.5, -118.5], states: ["WA","OR","ID"] },
+  { name: "CALIF",       country: "US", label: [37.0, -119.5], states: ["CA"] },
+  { name: "ARIZ",        country: "US", label: [34.2, -111.7], states: ["AZ"] },
+  { name: "COLO",        country: "US", label: [39.0, -113.0], states: ["CO","UT","NV"] },
+  { name: "TEXAS",       country: "US", label: [32.0, -100.0], states: ["TX","OK","NM"] },
+  { name: "GREAT LAKES", country: "US", label: [42.5,  -88.0], states: ["MN","WI","MI","IL","IN","OH"] },
+  { name: "SE",          country: "US", label: [33.6,  -88.0], states: ["LA","MS","AL","GA","TN","KY","AR"] },
+  { name: "FLA",         country: "US", label: [28.6,  -82.0], states: ["FL"] },
+  { name: "MID-ATL",     country: "US", label: [36.6,  -79.0], states: ["VA","WV","MD","DE","NC","SC"] },
+  { name: "NY",          country: "US", label: [41.2,  -77.5], states: ["NY","PA","NJ"] },
+  { name: "NEW ENGLAND", country: "US", label: [44.5,  -71.0], states: ["ME","NH","VT","MA","CT","RI"] },
+  // MX
+  { name: "GULF MX",     country: "MX", label: [21.0,  -97.0], states: ["MX.VE","MX.TM","MX.TB"] },
+  { name: "YUCATAN",     country: "MX", label: [20.2,  -88.7], states: ["MX.YU","MX.QR","MX.CM"] },
+  { name: "NE MX",       country: "MX", label: [26.5, -101.2], states: ["MX.NL","MX.CA"] },
+  { name: "PACIFIC MX",  country: "MX", label: [21.5, -104.5], states: ["MX.SI","MX.SO","MX.BS","MX.JA","MX.GR","MX.OA","MX.CP","MX.MC","MX.CL","MX.NA"] },
+  { name: "CENTRAL MX",  country: "MX", label: [23.0, -102.0], states: ["MX.AG","MX.BN","MX.CH","MX.DF","MX.DU","MX.GJ","MX.HI","MX.MX","MX.MR","MX.PU","MX.QE","MX.SL","MX.TL","MX.ZA"] },
+];
+
+const NHC_POLL_MS = 5 * 60 * 1000;
+const US_TOPOJSON    = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
+const MX_TOPOJSON    = "https://cdn.jsdelivr.net/gh/markmarkoh/datamaps@master/src/js/data/mex.topo.json";
+const STATE_RISK_JSON = "state_risk.json";
+
+let STATE_RISK = { ...STATE_RISK_SEED, ...MX_STATE_RISK_SEED };
+let STATE_RISK_META = null;
 
 /* =========================================================================
- *  LIB LOADER — Leaflet & Turf with unpkg → jsdelivr → cdnjs fallback.
- *  We don't start the app until both libraries resolve.
+ *  LIB LOADER — Leaflet, Turf, topojson-client with CDN fallbacks.
  * ========================================================================= */
 
 const CDN_CHAIN = {
@@ -365,20 +529,17 @@ function loadScriptChain(urls, check, label) {
   });
 }
 function loadCssChain(urls) {
-  // We only need one to attach; failure of one stylesheet is hard to detect, so
-  // we attach all three with low priority — duplicates are harmless.
   urls.forEach((u, idx) => {
-    if (idx === 0) return; // first one is already in <head>
+    if (idx === 0) return;
     const l = document.createElement("link");
     l.rel = "stylesheet"; l.href = u; l.crossOrigin = "anonymous";
     document.head.appendChild(l);
   });
 }
-
 async function bootLibs() {
   loadCssChain(CDN_CHAIN.leafletCss);
-  await loadScriptChain(CDN_CHAIN.leafletJs,    () => !!window.L,         "Leaflet");
-  await loadScriptChain(CDN_CHAIN.turfJs,       () => !!window.turf,      "Turf");
+  await loadScriptChain(CDN_CHAIN.leafletJs,      () => !!window.L,        "Leaflet");
+  await loadScriptChain(CDN_CHAIN.turfJs,         () => !!window.turf,     "Turf");
   await loadScriptChain(CDN_CHAIN.topojsonClient, () => !!window.topojson, "topojson-client");
 }
 
@@ -398,7 +559,7 @@ const STATE_FIPS_TO_USPS = {
 
 const RAMP = ["#e8f1de", "#9cc176", "#4a8b2c", "#1d3711", "#16290d"];
 function rampColor(score) {
-  if (score == null || isNaN(score)) return null; // → neutral
+  if (score == null || isNaN(score)) return null;
   if (score < 0.15) return RAMP[0];
   if (score < 0.40) return RAMP[1];
   if (score < 0.65) return RAMP[2];
@@ -406,24 +567,42 @@ function rampColor(score) {
   return RAMP[4];
 }
 
-let map, lanesLayer, conesLayer, statesLayer;
-let activeConeFeatures = []; // GeoJSON polygons used for turf intersect
+// Build region lookup + cached averages
+const STATE_TO_REGION = {}; // stateKey -> region object
+for (const r of REGIONS) for (const s of r.states) STATE_TO_REGION[s] = r;
+
+function regionAverage(region) {
+  const vals = region.states.map(s => STATE_RISK[s]).filter(v => typeof v === "number");
+  if (!vals.length) return null;
+  return vals.reduce((a, b) => a + b, 0) / vals.length;
+}
+
+let map, lanesLayer, conesLayer, statesLayer, regionLabelsLayer, laneLabelsLayer;
+let activeConeFeatures = [];
 let selectedLaneId = null;
 
 async function startApp() {
   document.getElementById("loader").classList.add("hidden");
 
-  map = L.map("map", { zoomControl: true, attributionControl: true })
-    .setView([37.5, -95.5], 4);
-
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 12,
-    attribution: '© OpenStreetMap · © CARTO',
-    subdomains: "abcd",
-  }).addTo(map);
+  // Center on US + Mexico — Texas-ish anchor, zoom to fit
+  map = L.map("map", {
+    zoomControl: true,
+    attributionControl: true,
+    zoomSnap: 0.25,
+    minZoom: 3,
+    maxZoom: 8,
+    worldCopyJump: false,
+  });
+  // No tile layer — clean editorial canvas (#fafafa).
+  map.attributionControl.addAttribution(
+    'US: us-atlas · MX: datamaps · cones: NOAA NHC · risk: HURDAT2'
+  );
+  // Fit to US + Mexico bounding box
+  map.fitBounds([[14.5, -125], [49.5, -66.5]], { padding: [10, 10] });
 
   await loadStateRisk();
   await drawStatesHeatmap();
+  drawRegionLabels();
   drawLanes();
   await refreshCones();
   setInterval(refreshCones, NHC_POLL_MS);
@@ -435,7 +614,8 @@ async function loadStateRisk() {
     if (!r.ok) throw new Error("HTTP " + r.status);
     const data = await r.json();
     if (data && data.scores) {
-      STATE_RISK = data.scores;
+      // Layer HURDAT2 US scores on top of seeds (US + MX seeds remain for MX states)
+      STATE_RISK = { ...STATE_RISK_SEED, ...MX_STATE_RISK_SEED, ...data.scores };
       STATE_RISK_META = data;
       renderRiskMeta(data);
     }
@@ -449,60 +629,140 @@ function renderRiskMeta(meta) {
   const el = document.getElementById("risk-meta");
   if (!el) return;
   if (!meta) {
-    el.innerHTML = '<span style="color:var(--neutral-text)">Using fallback seed table — run <code class="inline">scripts/build-state-risk.js</code> to generate <code class="inline">state_risk.json</code>.</span>';
+    el.innerHTML = '<span style="color:var(--neutral-text)">US: seed fallback (no <code class="inline">state_risk.json</code>) · MX: seed only.</span>';
     return;
   }
   const gen = meta.generated_at ? new Date(meta.generated_at).toISOString().slice(0, 10) : "?";
   const src = (meta.source_url || "").split("/").pop();
   el.innerHTML =
-    `<span class="num">HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km buffer · Jul–Sep · generated ${gen}</span><br/>` +
-    `<span style="color:var(--neutral-text)">source: ${src}</span>`;
+    `<span class="num">US: HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km · gen ${gen}</span><br/>` +
+    `<span style="color:var(--neutral-text)">MX: placeholder seed pending East-Pacific best-track import</span>`;
 }
 
-/* ----- States heatmap ---------------------------------------------------- */
-async function drawStatesHeatmap() {
-  let topo;
-  try {
-    const r = await fetch(STATE_TOPOJSON);
-    topo = await r.json();
-  } catch (e) {
-    console.warn("us-atlas fetch failed:", e);
-    return;
-  }
-  const geo = topojson.feature(topo, topo.objects.states);
+/* ----- States heatmap (US + MX, shaded by REGION average) --------------- */
 
-  statesLayer = L.geoJSON(geo, {
-    style: (feat) => {
-      const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
-      const score = STATE_RISK[usps];
-      const fill = rampColor(score);
-      return fill
-        ? { fillColor: fill, fillOpacity: 0.82, color: "#fff", weight: 0.6 }
-        : { fillColor: "#f4f4f4", fillOpacity: 1, color: "#e5e5e5", weight: 0.6 };
-    },
-    onEachFeature: (feat, layer) => {
-      const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
-      const score = STATE_RISK[usps];
-      const tipName = feat.properties && feat.properties.name ? feat.properties.name : usps;
-      const tipScore = (score == null)
-        ? '<span class="tip-num" style="color:#9a9a9a">no data</span>'
-        : `<span class="tip-num">${score.toFixed(2)}</span> Jul–Sep exposure`;
-      layer.bindTooltip(
-        `<span class="tip-title">${tipName}</span>${tipScore}`,
-        { sticky: true, className: "hh-tip" }
-      );
-      layer.on({
-        mouseover: (e) => e.target.setStyle({ weight: 1.4, color: "#fff" }),
-        mouseout:  (e) => statesLayer.resetStyle(e.target),
-      });
-    },
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`);
+  return r.json();
+}
+
+async function drawStatesHeatmap() {
+  // Fetch both sources in parallel.
+  let usTopo = null, mxTopo = null;
+  try { usTopo = await fetchJSON(US_TOPOJSON); } catch (e) { console.warn("us-atlas failed:", e); }
+  try { mxTopo = await fetchJSON(MX_TOPOJSON); } catch (e) { console.warn("mex topo failed:", e); }
+
+  const features = [];
+
+  if (usTopo) {
+    const fc = topojson.feature(usTopo, usTopo.objects.states);
+    for (const f of fc.features) {
+      const usps = STATE_FIPS_TO_USPS[String(f.id).padStart(2, "0")];
+      if (!usps) continue;
+      if (usps === "AK" || usps === "HI") continue; // not on this map
+      f.properties = { ...(f.properties || {}), _key: usps, _country: "US", _name: f.properties?.name || usps };
+      features.push(f);
+    }
+  }
+  if (mxTopo) {
+    const objKey = Object.keys(mxTopo.objects)[0];
+    const fc = topojson.feature(mxTopo, mxTopo.objects[objKey]);
+    for (const f of fc.features) {
+      const id = f.id;
+      const name = f.properties && f.properties.name;
+      if (!id || !name || name === "null") continue;
+      f.properties = { ...(f.properties || {}), _key: id, _country: "MX", _name: name };
+      features.push(f);
+    }
+  }
+
+  const collection = { type: "FeatureCollection", features };
+
+  statesLayer = L.geoJSON(collection, {
+    style: styleFeature,
+    onEachFeature: bindFeatureTooltip,
   }).addTo(map);
 }
 
-/* ----- Lanes ------------------------------------------------------------- */
+function styleFeature(feat) {
+  const key = feat.properties._key;
+  const region = STATE_TO_REGION[key];
+  if (!region) {
+    return {
+      fillColor: "#f4f4f4",
+      fillOpacity: 1,
+      color: "#e5e5e5",
+      weight: 0.6,
+    };
+  }
+  const avg = regionAverage(region);
+  const fill = rampColor(avg);
+  return {
+    fillColor: fill || "#f4f4f4",
+    fillOpacity: fill ? 0.88 : 1,
+    // No internal state border within a region — same color blends visually
+    color: "#fff",
+    weight: 0.4,
+  };
+}
+
+function bindFeatureTooltip(feat, layer) {
+  const key = feat.properties._key;
+  const region = STATE_TO_REGION[key];
+  const name = feat.properties._name;
+  const score = STATE_RISK[key];
+  let body;
+  if (region) {
+    const avg = regionAverage(region);
+    body =
+      `<span class="tip-title">${name}</span>` +
+      `region <strong>${region.name}</strong>` +
+      (avg != null
+        ? ` · <span class="tip-num">${avg.toFixed(2)}</span> avg`
+        : "") +
+      (score != null
+        ? `<br/><span class="tip-num">${score.toFixed(2)}</span> state score`
+        : "");
+  } else {
+    body =
+      `<span class="tip-title">${name}</span>` +
+      '<span style="color:#bbb">not in a region</span>';
+  }
+  layer.bindTooltip(body, { sticky: true, className: "hh-tip" });
+  layer.on({
+    mouseover: (e) => e.target.setStyle({ weight: 1.2, color: "#fff" }),
+    mouseout:  (e) => statesLayer.resetStyle(e.target),
+  });
+}
+
+/* ----- Region labels (callout boxes centered on each region) ------------ */
+
+function drawRegionLabels() {
+  if (regionLabelsLayer) regionLabelsLayer.remove();
+  regionLabelsLayer = L.layerGroup().addTo(map);
+
+  for (const r of REGIONS) {
+    const avg = regionAverage(r);
+    const html = `<div class="region-label">${r.name}</div>`;
+    const icon = L.divIcon({
+      className: "region-label-wrap",
+      html,
+      iconSize: null,   // auto from html
+      iconAnchor: [0, 0],
+    });
+    const marker = L.marker(r.label, { icon, interactive: false, keyboard: false });
+    marker.addTo(regionLabelsLayer);
+  }
+}
+
+/* ----- Lanes (polyline path + callout box at the origin) ---------------- */
+
 function drawLanes() {
   if (lanesLayer) lanesLayer.remove();
+  if (laneLabelsLayer) laneLabelsLayer.remove();
   lanesLayer = L.layerGroup().addTo(map);
+  laneLabelsLayer = L.layerGroup().addTo(map);
 
   const listEl = document.getElementById("lanes-list");
   listEl.innerHTML = "";
@@ -510,16 +770,16 @@ function drawLanes() {
   LANES.forEach((lane) => {
     const flagged = isLaneFlagged(lane);
     const isSel = lane.id === selectedLaneId;
-    const color = (flagged || isSel) ? "var(--accent)" : "#4a8b2c";
-    const hex = (flagged || isSel) ? "#ec7700" : "#4a8b2c";
+    const colored = flagged || isSel;
+    const hex = colored ? "#ec7700" : "#4a8b2c";
 
+    // Path
     const poly = L.polyline(lane.waypoints, {
       color: hex,
-      weight: (flagged || isSel) ? 4 : 2.5,
-      opacity: 0.95,
-      dashArray: flagged ? null : (isSel ? null : "1, 0"),
+      weight: colored ? 3.5 : 2,
+      opacity: 0.92,
     }).addTo(lanesLayer);
-
+    poly.on("click", () => selectLane(lane.id));
     poly.bindTooltip(
       `<span class="tip-title">${lane.name}</span>` +
       `<span>${lane.ports}</span><br/>` +
@@ -528,14 +788,32 @@ function drawLanes() {
         : `<span style="color:#9a9a9a">clear</span>`),
       { sticky: true, className: "hh-tip" }
     );
-    poly.on("click", () => selectLane(lane.id));
 
-    // origin/dest dots
-    [lane.waypoints[0], lane.waypoints[lane.waypoints.length - 1]].forEach(([la, ln]) => {
-      L.circleMarker([la, ln], {
-        radius: 4, color: hex, weight: 2, fillColor: "#fff", fillOpacity: 1,
-      }).addTo(lanesLayer);
+    // Destination dot (small, unbranded)
+    const dest = lane.waypoints[lane.waypoints.length - 1];
+    L.circleMarker(dest, {
+      radius: 3.5, color: hex, weight: 1.8, fillColor: "#fff", fillOpacity: 1,
+    }).addTo(lanesLayer);
+
+    // Callout box anchored at the origin
+    const origin = lane.waypoints[0];
+    const status = flagged ? "Flagged" : (isSel ? "Selected" : lane.ports);
+    const cls = "lane-label" + (flagged ? " flagged" : "") + (isSel ? " selected" : "");
+    const html =
+      `<div class="${cls}">` +
+        `<span class="dot"></span>` +
+        `<span class="name">${lane.name}</span>` +
+        `<span class="metric">${status}</span>` +
+      `</div>`;
+    const icon = L.divIcon({
+      className: "lane-label-wrap",
+      html,
+      iconSize: null,
+      iconAnchor: [0, 0],
     });
+    const marker = L.marker(origin, { icon, riseOnHover: true });
+    marker.on("click", () => selectLane(lane.id));
+    marker.addTo(laneLabelsLayer);
 
     // Sidebar row
     const row = document.createElement("div");
@@ -543,7 +821,7 @@ function drawLanes() {
     row.dataset.id = lane.id;
     row.innerHTML = `
       <span class="name">${lane.name}</span>
-      <span class="status">${flagged ? "Flagged" : "Clear"}</span>
+      <span class="status">${flagged ? "Flagged" : (isSel ? "Selected" : "Clear")}</span>
       <span class="ports">${lane.ports}</span>
     `;
     row.addEventListener("click", () => selectLane(lane.id));
@@ -558,7 +836,7 @@ function selectLane(id) {
     const lane = LANES.find(l => l.id === id);
     if (lane) {
       const bounds = L.latLngBounds(lane.waypoints);
-      map.fitBounds(bounds.pad(0.2));
+      map.fitBounds(bounds.pad(0.25));
     }
   }
 }
@@ -570,7 +848,6 @@ function isLaneFlagged(lane) {
     try {
       return turf.booleanIntersects(line, cone);
     } catch (e) {
-      // fall back to bounding-box check
       try {
         const bbox = turf.bbox(cone);
         const bboxPoly = turf.bboxPolygon(bbox);
@@ -582,11 +859,10 @@ function isLaneFlagged(lane) {
 
 /* ----- NHC active-storm cones ------------------------------------------- */
 /**
- * NOAA NHC tropical REST service hosts active hurricane / storm geometries.
- *   Base: https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer
- * Layer 4 is the forecast cone polygon for active Atlantic storms.
- * Note: CORS on this service is intermittent — see README. We try the
- * service first and degrade gracefully if blocked.
+ * NOAA NHC tropical REST service.  Layer 4 is the active forecast-cone
+ * polygon set — covers Atlantic, Caribbean, and Gulf of Mexico, so storms
+ * over Mexico appear automatically.
+ * Note: CORS on this service is intermittent — see README.
  */
 const NHC_CONE_URL =
   "https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer/4/query"
@@ -611,7 +887,7 @@ async function refreshCones() {
   const feats = (geo && geo.features) ? geo.features : [];
   if (!feats.length) {
     listEl.innerHTML = '<div class="empty">No active cones from NHC (none in season, or CORS-blocked).</div>';
-    drawLanes(); // re-evaluate flags
+    drawLanes();
     return;
   }
 
@@ -619,7 +895,7 @@ async function refreshCones() {
     activeConeFeatures.push(f);
     const layer = L.geoJSON(f, {
       style: {
-        color: "#ec7700",          // accent — active cone outline
+        color: "#ec7700",
         weight: 2,
         fillColor: "#ec7700",
         fillOpacity: 0.08,
@@ -647,7 +923,7 @@ async function refreshCones() {
     listEl.appendChild(div);
   });
 
-  drawLanes(); // re-evaluate flags now that cones changed
+  drawLanes();
 }
 
 /* =========================================================================

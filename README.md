@@ -1,12 +1,12 @@
 # hurricane-heatmap
 
-Single-file HTML dashboard that visualizes **hurricane risk for refrigerated-trucking lanes** across the United States. Open `index.html` directly in a browser — no build step, no server required.
+Single-file HTML dashboard that visualizes **hurricane risk for refrigerated-trucking lanes** across the United States **and Mexico**. Open `index.html` directly in a browser — no build step, no server required.
 
 ## What it shows
 
-1. **US state-level risk heatmap** (Jul–Sep tropical-cyclone window), shaded with a green data ramp from light (`#e8f1de`) to very dark (`#16290d`). Gulf Coast and Florida are darkest; states with no/minimal data render in grayscale neutral.
-2. **Live NHC storm cones.** The page polls NOAA's National Hurricane Center tropical REST service every 5 minutes and outlines active forecast cones in the accent color `#ec7700`.
-3. **Reefer lane alerts.** A small editable set of trucking lanes is rendered as polylines. Each lane is tested against every active cone polygon using turf.js (`booleanIntersects`); any lane that crosses a cone is flagged in `#ec7700`.
+1. **Regional risk heatmap** (Jul–Sep tropical-cyclone window), shaded with a green data ramp from light (`#e8f1de`) to very dark (`#16290d`). States are grouped into named regions (FLA, SE, TEXAS, GULF MX, YUCATAN, PACIFIC MX, …) and each region is colored by the *average* score of its member states. Each region carries a single rounded white callout label centered on it. States not in any region render in grayscale neutral.
+2. **Live NHC storm cones.** The page polls NOAA's National Hurricane Center tropical REST service every 5 minutes and outlines active forecast cones in the accent color `#ec7700`. The NHC feed already covers storms over Mexico, the Gulf, and the Caribbean.
+3. **Reefer lane alerts** (incl. cross-border). A small editable set of trucking lanes — including Laredo → Monterrey and Pharr → Veracruz — is rendered as polylines with a white callout box at each lane's origin. Each lane is tested against every active cone polygon using turf.js (`booleanIntersects`); any lane that crosses a cone is flagged in `#ec7700`.
 
 ## Design
 
@@ -19,7 +19,9 @@ See [`CLAUDE.md`](./CLAUDE.md) for the full design system (typography, color ram
 | State risk heatmap     | **NOAA HURDAT2** (Atlantic best-track database)                                                       | Real counts derived by `scripts/build-state-risk.js` and committed as `state_risk.json` — the dashboard fetches that at boot. Falls back to an in-file seed table if the JSON is missing. |
 | Active forecast cones  | **NOAA NHC** tropical REST service at `mapservices.weather.noaa.gov`, layer `4` of `NHC_tropical_weather` | Returns active Atlantic storms' forecast-cone polygons as GeoJSON. Polled every 5 minutes.                                                                                             |
 | US state geometry      | `us-atlas` TopoJSON via jsDelivr (`states-10m.json`)                                                  | Decoded with `topojson-client`.                                                                                                                                                        |
-| Basemap tiles          | CARTO `light_all`                                                                                     | Free positron-style tiles; OpenStreetMap attribution preserved.                                                                                                                        |
+| Mexican state geometry | `datamaps/mex.topo.json` via jsDelivr (`MX.XX` ids)                                                   | 32 Mexican states; decoded with `topojson-client`.                                                                                                                                     |
+| Mexican state risk     | Seed values in `MX_STATE_RISK_SEED` (in-file)                                                         | Placeholders following the pattern: Gulf-/Caribbean-facing states HIGH, NE Mexico interior MODERATE, Pacific coast MODERATE, central interior LOW. Pending an East-Pacific best-track import (see code comment).  |
+| Basemap                | None — clean `#fafafa` editorial canvas                                                               | Region polygons read clearly without tile clutter; cones overlay directly on the canvas.                                                                                                |
 
 ### Regenerating `state_risk.json` from HURDAT2
 
