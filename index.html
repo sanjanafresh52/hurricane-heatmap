@@ -324,11 +324,19 @@
     font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
     color: #666;
   }
+  .outlook-counts-head {
+    font-size: 11px;
+    color: #444;
+    margin-top: 12px;
+    margin-bottom: 6px;
+    line-height: 1.4;
+    font-weight: 600;
+  }
   .outlook-counts {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 8px;
-    margin-top: 12px;
+    margin-top: 4px;
   }
   .outlook-counts .stat {
     border: 1px solid var(--neutral-border);
@@ -795,6 +803,9 @@ function renderSeasonalOutlook() {
        <span class="pct">${verdictPct}% likely</span>
      </div>
      <div class="outlook-probs">${probRows}</div>
+     <div class="outlook-counts-head">
+       NOAA's forecast for the ${o.season} season (predicted, not yet occurred):
+     </div>
      <div class="outlook-counts">
        ${stat(r.named_storms[0],     r.named_storms[1],     c.named_storms,     "All storms",  "tropical storms &amp; up")}
        ${stat(r.hurricanes[0],       r.hurricanes[1],       c.hurricanes,       "Hurricanes",  "74+ mph")}
