@@ -289,45 +289,10 @@
   code.inline { background: #f4f4f4; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
 
   /* ----- Seasonal-outlook panel ----------------------------------------- */
-  .outlook-headline {
-    display: flex; align-items: baseline; gap: 8px;
-    margin-bottom: 10px;
-  }
-  .outlook-headline .verdict {
-    font-family: "Montserrat", sans-serif;
-    font-weight: 600;
-    font-size: 16px;
-    color: var(--ink);
-    letter-spacing: -0.01em;
-  }
-  .outlook-headline .pct {
-    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
-    font-weight: 600; font-size: 13px; color: #4a8b2c;
-  }
-  .outlook-probs { margin-top: 6px; }
-  .outlook-probs .row {
-    display: grid;
-    grid-template-columns: 90px 1fr 36px;
-    align-items: center;
-    gap: 8px;
-    font-size: 11px;
-    color: #444;
-    margin-bottom: 4px;
-  }
-  .outlook-probs .row .label { text-transform: uppercase; letter-spacing: 0.05em; }
-  .outlook-probs .row .bar {
-    height: 8px; background: #f4f4f4; border-radius: 2px; overflow: hidden;
-  }
-  .outlook-probs .row .bar .fill { height: 100%; border-radius: 2px; }
-  .outlook-probs .row .val {
-    text-align: right;
-    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
-    color: #666;
-  }
   .outlook-counts-head {
     font-size: 11px;
     color: #444;
-    margin-top: 12px;
+    margin-top: 0;
     margin-bottom: 6px;
     line-height: 1.4;
     font-weight: 600;
@@ -770,23 +735,6 @@ function renderSeasonalOutlook() {
   if (!el || !SEASONAL_OUTLOOK) return;
   const o = SEASONAL_OUTLOOK;
 
-  // Color each probability bar with a ramp stop: below=light, near=mid, above=dark.
-  const barColor = {
-    "below-normal": "#9cc176",
-    "near-normal":  "#4a8b2c",
-    "above-normal": "#1d3711",
-  };
-  const verdictPct = o.probabilities[o.verdict];
-
-  const probRows = Object.keys(o.probabilities).map((k) => {
-    const pct = o.probabilities[k];
-    return `<div class="row">
-      <span class="label">${k}</span>
-      <span class="bar"><span class="fill" style="width:${pct}%;background:${barColor[k]}"></span></span>
-      <span class="val">${pct}%</span>
-    </div>`;
-  }).join("");
-
   const r = o.ranges;
   const c = o.climatology;
   const stat = (lo, hi, avg, label, subtitle) =>
@@ -798,12 +746,7 @@ function renderSeasonalOutlook() {
      </div>`;
 
   el.innerHTML =
-    `<div class="outlook-headline">
-       <span class="verdict">${o.verdict[0].toUpperCase() + o.verdict.slice(1)}</span>
-       <span class="pct">${verdictPct}% likely</span>
-     </div>
-     <div class="outlook-probs">${probRows}</div>
-     <div class="outlook-counts-head">
+    `<div class="outlook-counts-head">
        NOAA's forecast for the ${o.season} season (predicted, not yet occurred):
      </div>
      <div class="outlook-counts">
