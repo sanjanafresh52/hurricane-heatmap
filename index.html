@@ -353,6 +353,20 @@
     margin-top: 2px;
     display: block;
   }
+  .outlook-counts .stat .sub {
+    display: block;
+    font-size: 9px;
+    color: #888;
+    margin-top: 1px;
+    line-height: 1.25;
+  }
+  .outlook-tier-note {
+    font-size: 10px;
+    color: #777;
+    margin-top: 8px;
+    line-height: 1.4;
+    font-style: italic;
+  }
   .outlook-meta {
     font-size: 11px; color: var(--neutral-text);
     margin-top: 10px;
@@ -767,10 +781,11 @@ function renderSeasonalOutlook() {
 
   const r = o.ranges;
   const c = o.climatology;
-  const stat = (lo, hi, avg, label) =>
+  const stat = (lo, hi, avg, label, subtitle) =>
     `<div class="stat">
        <span class="n">${lo}–${hi}</span>
        <span class="l">${label}</span>
+       <span class="sub">${subtitle}</span>
        <span class="l" style="text-transform:none;letter-spacing:0;color:#9a9a9a">avg ${avg}</span>
      </div>`;
 
@@ -781,9 +796,12 @@ function renderSeasonalOutlook() {
      </div>
      <div class="outlook-probs">${probRows}</div>
      <div class="outlook-counts">
-       ${stat(r.named_storms[0],     r.named_storms[1],     c.named_storms,     "Named")}
-       ${stat(r.hurricanes[0],       r.hurricanes[1],       c.hurricanes,       "Hurricanes")}
-       ${stat(r.major_hurricanes[0], r.major_hurricanes[1], c.major_hurricanes, "Major (3+)")}
+       ${stat(r.named_storms[0],     r.named_storms[1],     c.named_storms,     "All storms",  "tropical storms &amp; up")}
+       ${stat(r.hurricanes[0],       r.hurricanes[1],       c.hurricanes,       "Hurricanes",  "74+ mph")}
+       ${stat(r.major_hurricanes[0], r.major_hurricanes[1], c.major_hurricanes, "Severe",      "Cat 3+, 111+ mph")}
+     </div>
+     <div class="outlook-tier-note">
+       Each tier is a subset of the one before — all are forecasts, not confirmed.
      </div>
      <div class="outlook-meta">
        NOAA CPC · season ${o.season} · issued ${o.issued} ·
