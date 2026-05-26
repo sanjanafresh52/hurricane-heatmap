@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Hurricane Heatmap — Reefer Lane Risk</title>
+<title>Hurricane Risk &amp; Live Storm Tracker</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -28,12 +28,15 @@
     --ink:    #1a1a1a;
   }
 
-  html, body { margin: 0; padding: 0; background: var(--canvas); color: var(--ink); }
+  html, body { margin: 0; padding: 0; background: var(--canvas); color: var(--ink); height: 100%; }
   body {
     font-family: "Open Sans", system-ui, sans-serif;
     font-weight: 400;
     font-size: 14px;
     line-height: 1.45;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
   }
   h1, h2, h3 { font-family: "Montserrat", system-ui, sans-serif; margin: 0; }
   h1 { font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
@@ -43,35 +46,47 @@
   .num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
 
   header {
-    padding: 18px 24px 14px;
+    flex: 0 0 auto;
+    padding: 16px 24px 14px;
     border-bottom: 1px solid var(--neutral-border);
     background: #fff;
-    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
-  }
-  header .sub { color: #555; font-size: 13px; }
-  header .badge {
-    margin-left: auto;
-    font-size: 11px; font-weight: 600;
-    color: #fff; background: var(--ink);
-    padding: 4px 8px; border-radius: 3px;
-    text-transform: uppercase; letter-spacing: 0.06em;
   }
 
-  main {
+  /* Top panels row — three responsive cards */
+  #panels {
+    flex: 0 0 auto;
     display: grid;
-    grid-template-columns: 1fr 360px;
-    gap: 0;
-    height: calc(100vh - 65px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    padding: 12px 20px;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--neutral-border);
   }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+  @media (max-width: 1024px) { #panels { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 700px)  { #panels { grid-template-columns: 1fr; } }
+  .panel {
+    background: #fff;
+    border: 1px solid var(--neutral-border);
+    border-radius: 4px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    max-height: 280px;
+    min-height: 0;
+  }
+  .panel h2 { margin-bottom: 8px; flex: 0 0 auto; }
+  .panel .panel-body { flex: 1 1 auto; overflow-y: auto; min-height: 0; }
+  .panel p { margin: 0 0 8px; }
 
   #map {
-    width: 100%; height: 100%; min-height: 480px;
+    flex: 1 1 auto;
+    width: 100%;
+    min-height: 380px;
     background: var(--canvas);
-    border: 1.5px solid var(--ink);
+    border-top: 1.5px solid var(--ink);
+    border-bottom: 1.5px solid var(--ink);
     box-sizing: border-box;
   }
-  /* Editorial canvas — no tiles, plain background */
   .leaflet-container { background: var(--canvas) !important; outline: none; font-family: "Open Sans", sans-serif; }
   .leaflet-control-attribution {
     background: rgba(255,255,255,0.85) !important;
@@ -79,14 +94,69 @@
     font-size: 10px !important;
   }
 
-  aside {
-    border-left: 1px solid var(--neutral-border);
+  /* Footer "what this means" strip */
+  .ground-strip {
+    flex: 0 0 auto;
+    padding: 10px 24px 12px;
     background: #fff;
-    overflow-y: auto;
-    padding: 16px 18px 24px;
+    border-top: 1px solid var(--neutral-border);
+    font-size: 11px;
+    color: #555;
+    line-height: 1.5;
   }
-  aside section + section { margin-top: 22px; }
-  aside p { margin: 0 0 8px; }
+  .ground-strip strong { color: var(--ink); }
+
+  /* In-map legend (Leaflet control) */
+  .map-legend {
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid var(--neutral-border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    font-family: "Open Sans", sans-serif;
+    font-size: 11px;
+    color: #444;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.07);
+    line-height: 1.4;
+  }
+  .map-legend .title {
+    font-weight: 600;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--ink);
+    margin-bottom: 4px;
+  }
+  .map-legend .bar { display: flex; height: 8px; border-radius: 2px; overflow: hidden; margin-bottom: 2px; }
+  .map-legend .bar span { flex: 1; }
+  .map-legend .ends {
+    display: flex; justify-content: space-between;
+    font-size: 10px; color: #666;
+  }
+  .map-legend .item {
+    display: flex; align-items: center; gap: 6px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+  .map-legend .item .sw {
+    width: 10px; height: 10px;
+    border: 1px solid var(--neutral-border);
+    border-radius: 2px;
+    flex: 0 0 auto;
+  }
+  .map-legend .item .pin {
+    width: 10px; height: 14px;
+    background: #d32f2f;
+    border: 1px solid #fff;
+    border-radius: 50% 50% 50% 0;
+    transform: rotate(-45deg);
+    flex: 0 0 auto;
+  }
+  .map-legend .item .cone {
+    width: 12px; height: 8px;
+    border: 1px dashed var(--accent);
+    background: rgba(236, 119, 0, 0.12);
+    flex: 0 0 auto;
+  }
 
   .legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
   .legend .swatches { display: flex; flex: 1; height: 12px; border-radius: 2px; overflow: hidden; }
@@ -320,15 +390,15 @@
   .demo-banner {
     background: var(--ink);
     color: #fff;
-    border-left: 3px solid var(--accent);
-    padding: 8px 10px;
-    margin-bottom: 8px;
+    padding: 8px 24px;
     font-family: "Open Sans", sans-serif;
     font-size: 11px;
     font-weight: 600;
-    letter-spacing: 0.05em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
-    border-radius: 0 3px 3px 0;
+    border-top:    2px solid var(--accent);
+    border-bottom: 2px solid var(--accent);
+    flex: 0 0 auto;
   }
   .demo-banner[hidden] { display: none; }
   .demo-banner .accent { color: var(--accent); }
@@ -342,88 +412,62 @@
 <div class="loader" id="loader">Loading map libraries…</div>
 
 <header>
-  <h1>Hurricane Heatmap</h1>
-  <span class="sub">Refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
-  <span class="badge" id="live-badge">Live</span>
+  <h1>Hurricane Risk &amp; Live Storm Tracker</h1>
 </header>
 
-<main>
-  <div id="map" aria-label="US hurricane risk map"></div>
+<div id="demo-banner" class="demo-banner" hidden role="status">
+  <span class="accent">Demo mode</span> — simulated storm, not live NOAA data
+</div>
 
-  <aside>
-    <section>
-      <h2>Risk legend</h2>
-      <div class="legend">
-        <div class="swatches" aria-hidden="true">
-          <span style="background:#e8f1de"></span>
-          <span style="background:#9cc176"></span>
-          <span style="background:#4a8b2c"></span>
-          <span style="background:#1d3711"></span>
-          <span style="background:#16290d"></span>
-        </div>
-      </div>
-      <div class="legend"><div class="ends" style="flex:1"><span>Low</span><span class="num">Region avg · Jul–Sep exposure</span><span>High</span></div></div>
-      <div class="legend"><div class="neutral-row"><span class="sw"></span><span>Not in a region · neutral</span></div></div>
-      <div id="risk-meta" style="font-size:11px;color:#555;margin-top:8px;line-height:1.5;"></div>
-    </section>
+<div id="panels">
+  <section class="panel" id="panel-outlook">
+    <h2>2026 seasonal outlook</h2>
+    <div class="panel-body" id="outlook-body">
+      <div style="font-size:12px;color:var(--neutral-text)">Loading…</div>
+    </div>
+  </section>
 
-    <section>
-      <h2>What this means</h2>
-      <p style="font-size:12px;color:#444;">
-        Each labeled region is shaded by the <strong>average</strong> Jul–Sep
-        Atlantic tropical-cyclone exposure of its member states
-        (1851–present, HURDAT2, ≤150 km of the state) — i.e. the long-run
-        climatology, not a forecast for this season.
-      </p>
-      <p style="font-size:12px;color:#444;">
-        The <strong>seasonal outlook</strong> panel below summarizes NOAA CPC's
-        forecast for the current season. Live NHC forecast cones are drawn on
-        top of the heatmap. A reefer lane is
-        <strong style="color:var(--accent)">flagged</strong> when its path
-        crosses any active cone polygon (turf.js intersect).
-      </p>
-    </section>
-
-    <section>
-      <h2>2026 seasonal outlook</h2>
-      <div id="outlook-body">
-        <div style="font-size:12px;color:var(--neutral-text)">Loading…</div>
-      </div>
-    </section>
-
-    <section>
-      <h2>Active storms (NHC)</h2>
+  <section class="panel" id="panel-storms">
+    <h2>Active storms (NHC)</h2>
+    <div class="panel-body">
       <button id="demo-btn" class="demo-toggle" type="button" aria-pressed="false">
         <span class="pip"></span>Demo storm (test)
       </button>
-      <div id="demo-banner" class="demo-banner" hidden role="status">
-        <span class="accent">Demo mode</span> — simulated storm, not live NOAA data
-      </div>
       <div class="storms-list" id="storms-list">
         <div class="empty">Polling NOAA NHC…</div>
       </div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
-        Re-polls every 5 min. The NHC feed covers the Atlantic, Gulf, and
-        Caribbean basins.
+        US-relevant only · re-polls every 5 min.
       </div>
-    </section>
+    </div>
+  </section>
 
-    <section>
-      <h2>Reefer lane alerts</h2>
+  <section class="panel" id="panel-lanes">
+    <h2>Reefer lane alerts</h2>
+    <div class="panel-body">
       <div id="lanes-list"></div>
       <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
         Click a lane to draw its path on the map in
         <span style="color:var(--accent);font-weight:600;">orange</span>.
-        Click again to hide it.
+        Click again to hide.
       </div>
-    </section>
-
-    <div class="footnote">
-      State scores come from HURDAT2 (<code class="inline">state_risk.json</code>).
-      CORS on the NHC service may fail in some browsers — see README.
     </div>
-  </aside>
-</main>
+  </section>
+</div>
+
+<div id="map" aria-label="US hurricane risk map"></div>
+
+<footer class="ground-strip">
+  <strong>What this means.</strong>
+  Region shading = average Jul–Sep Atlantic tropical-cyclone exposure of member
+  states (NOAA HURDAT2, 1851–2025). <span style="color:#d32f2f;font-weight:600">Red pins</span>
+  mark active NHC storm centers, filtered to US-relevant storms only.
+  <span style="color:var(--accent);font-weight:600">Orange cones</span> are NHC 5-day
+  forecast cones; a reefer lane is
+  <span style="color:var(--accent);font-weight:600">flagged</span> when its path
+  crosses one.
+  <span id="risk-meta" style="color:var(--neutral-text)"></span>
+</footer>
 
 <script>
 /* =========================================================================
@@ -647,6 +691,33 @@ const NHC_POLL_MS = 5 * 60 * 1000;
 const US_TOPOJSON    = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 const STATE_RISK_JSON = "state_risk.json";
 
+/**
+ * US_THREAT_BBOX — only storms whose current position OR forecast cone
+ * intersects this box render on the map / list.  Default covers CONUS
+ * plus the Gulf of Mexico, Atlantic coastal waters, and the Caribbean
+ * approaches to the US (i.e. anywhere a system could plausibly affect
+ * US-bound cargo).
+ *
+ * Format: [[southLat, westLng], [northLat, eastLng]]
+ *
+ * Adjust freely:
+ *   - Widen east  (e.g. -55) to include open-Atlantic systems earlier.
+ *   - Narrow south (e.g. 18)  to drop deep-Caribbean storms.
+ *   - Move west boundary east to drop Pacific-side influence near MX.
+ */
+const US_THREAT_BBOX = [[15.0, -100.0], [50.0, -60.0]];
+
+/**
+ * NOAA NHC tropical REST service.
+ *   Layer 0 — current storm-center position points (red pins below).
+ *   Layer 4 — forecast cone polygons (orange cones; used by turf intersect).
+ * Both feeds are merged, grouped by STORMNAME, then filtered to storms
+ * whose any feature lies in US_THREAT_BBOX.
+ */
+const NHC_BASE = "https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer";
+const NHC_CONE_URL     = NHC_BASE + "/4/query?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+const NHC_POSITION_URL = NHC_BASE + "/0/query?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+
 let STATE_RISK = { ...STATE_RISK_SEED };
 let STATE_RISK_META = null;
 
@@ -765,6 +836,7 @@ async function startApp() {
   );
   // Fit to CONUS
   map.fitBounds([[24.5, -125], [49.5, -66.5]], { padding: [10, 10] });
+  addMapLegend();
 
   renderSeasonalOutlook();
   bindDemoToggle();
@@ -774,6 +846,29 @@ async function startApp() {
   drawLanes();
   await refreshCones();
   setInterval(() => { if (!demoMode) refreshCones(); }, NHC_POLL_MS);
+}
+
+function addMapLegend() {
+  const ctl = L.control({ position: "bottomleft" });
+  ctl.onAdd = function () {
+    const div = L.DomUtil.create("div", "map-legend");
+    div.innerHTML =
+      '<div class="title">Region risk (Jul–Sep avg)</div>' +
+      '<div class="bar">' +
+        '<span style="background:#e8f1de"></span>' +
+        '<span style="background:#9cc176"></span>' +
+        '<span style="background:#4a8b2c"></span>' +
+        '<span style="background:#1d3711"></span>' +
+        '<span style="background:#16290d"></span>' +
+      '</div>' +
+      '<div class="ends"><span>Low</span><span>High</span></div>' +
+      '<div class="item"><span class="sw" style="background:#f4f4f4"></span>Not in a region</div>' +
+      '<div class="item"><span class="pin"></span>Active storm center (US-only)</div>' +
+      '<div class="item"><span class="cone"></span>NHC forecast cone</div>';
+    L.DomEvent.disableClickPropagation(div);
+    return div;
+  };
+  ctl.addTo(map);
 }
 
 function bindDemoToggle() {
@@ -857,14 +952,12 @@ function renderRiskMeta(meta) {
   const el = document.getElementById("risk-meta");
   if (!el) return;
   if (!meta) {
-    el.innerHTML = '<span style="color:var(--neutral-text)">Using fallback seed table — run <code class="inline">scripts/build-state-risk.js</code> to generate <code class="inline">state_risk.json</code>.</span>';
+    el.textContent = " · fallback seed (no state_risk.json).";
     return;
   }
   const gen = meta.generated_at ? new Date(meta.generated_at).toISOString().slice(0, 10) : "?";
-  const src = (meta.source_url || "").split("/").pop();
   el.innerHTML =
-    `<span class="num">HURDAT2 · ${meta.max_count.toLocaleString()} max storm-count (FL) · ${meta.buffer_km} km buffer · Jul–Sep · generated ${gen}</span><br/>` +
-    `<span style="color:var(--neutral-text)">source: ${src}</span>`;
+    ` · <span class="num">HURDAT2 max ${meta.max_count.toLocaleString()} storms (FL) · ${meta.buffer_km} km buffer · generated ${gen}</span>`;
 }
 
 /* ----- States heatmap (US + MX, shaded by REGION average) --------------- */
@@ -1075,32 +1168,88 @@ function isLaneFlagged(lane) {
   });
 }
 
-/* ----- NHC active-storm cones ------------------------------------------- */
-/**
- * NOAA NHC tropical REST service.  Layer 4 is the active forecast-cone
- * polygon set — covers Atlantic, Caribbean, and Gulf of Mexico, so storms
- * over Mexico appear automatically.
- * Note: CORS on this service is intermittent — see README.
- */
-const NHC_CONE_URL =
-  "https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer/4/query"
-  + "?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+/* ----- NHC active storms (red pins + forecast cones) -------------------- */
+
+function stormName(p) {
+  return p.STORMNAME || p.stormname || p.NAME || p.STORMID || "Active storm";
+}
+
+function ssCategory(kt) {
+  if (kt == null || isNaN(kt)) return null;
+  if (kt >= 137) return "Cat 5";
+  if (kt >= 113) return "Cat 4";
+  if (kt >=  96) return "Cat 3";
+  if (kt >=  83) return "Cat 2";
+  if (kt >=  64) return "Cat 1";
+  if (kt >=  34) return "TS";
+  return "TD";
+}
+
+// Cached red-pin DivIcon — created lazily once Leaflet is on the page.
+let _STORM_PIN = null;
+function stormPinIcon() {
+  if (_STORM_PIN) return _STORM_PIN;
+  _STORM_PIN = L.divIcon({
+    className: "storm-pin-wrap",
+    html:
+      '<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30" aria-hidden="true">' +
+        '<path d="M11 0 C4.9 0 0 4.9 0 11 C0 19 11 30 11 30 C11 30 22 19 22 11 C22 4.9 17.1 0 11 0 Z" ' +
+        'fill="#d32f2f" stroke="#fff" stroke-width="1.5"/>' +
+        '<circle cx="11" cy="11" r="3.5" fill="#fff"/>' +
+      '</svg>',
+    iconSize: [22, 30],
+    iconAnchor: [11, 30],
+    popupAnchor: [0, -28],
+  });
+  return _STORM_PIN;
+}
+
+// US-threat filter — turf polygon built from the configured bbox.
+let _US_BBOX_POLY = null;
+function usThreatPolygon() {
+  if (_US_BBOX_POLY) return _US_BBOX_POLY;
+  const [[s, w], [n, e]] = US_THREAT_BBOX;
+  _US_BBOX_POLY = turf.bboxPolygon([w, s, e, n]);
+  return _US_BBOX_POLY;
+}
+function featureTouchesUS(f) {
+  if (!f || !f.geometry) return false;
+  const poly = usThreatPolygon();
+  try {
+    if (f.geometry.type === "Point") {
+      return turf.booleanPointInPolygon(turf.point(f.geometry.coordinates), poly);
+    }
+    return turf.booleanIntersects(f, poly);
+  } catch (e) {
+    return false;
+  }
+}
+
+async function fetchGeoJSON(url) {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch (e) {
+    console.warn("NHC fetch failed:", url, e);
+    return null;
+  }
+}
 
 async function refreshCones() {
-  let geo = null;
+  let combinedFeats = [];
 
   if (demoMode) {
-    // Demo path — feed the hand-built FeatureCollection through the
-    // exact same downstream pipeline as the live feed.  No special
-    // branches below this point.
-    geo = DEMO_STORM;
+    // Demo path — feed DEMO_STORM through the EXACT same downstream
+    // pipeline as the live feed.  No special-case branches below.
+    combinedFeats = DEMO_STORM.features.slice();
   } else {
-    try {
-      const r = await fetch(NHC_CONE_URL, { cache: "no-store" });
-      if (r.ok) geo = await r.json();
-    } catch (e) {
-      console.warn("NHC cone fetch blocked or failed:", e);
-    }
+    const [cone, pos] = await Promise.all([
+      fetchGeoJSON(NHC_CONE_URL),
+      fetchGeoJSON(NHC_POSITION_URL),
+    ]);
+    if (cone && cone.features) combinedFeats.push(...cone.features);
+    if (pos  && pos.features)  combinedFeats.push(...pos.features);
   }
 
   if (conesLayer) conesLayer.remove();
@@ -1110,31 +1259,65 @@ async function refreshCones() {
   const listEl = document.getElementById("storms-list");
   listEl.innerHTML = "";
 
-  const feats = (geo && geo.features) ? geo.features : [];
-  if (!feats.length) {
-    listEl.innerHTML = '<div class="empty">No active cones from NHC (none in season, or CORS-blocked).</div>';
+  if (!combinedFeats.length) {
+    listEl.innerHTML = '<div class="empty">No active US-threatening storms (none in season, or CORS-blocked).</div>';
     drawLanes();
     return;
   }
 
-  // Group by storm name so a multi-feature storm (cone + position + track)
-  // produces ONE sidebar card, matching the live feed's one-card-per-storm
-  // behavior when only cone polygons are present.
-  const seenStormCards = new Set();
+  // Group by storm name, then drop storms that don't touch the US bbox
+  // anywhere (current position, cone, or past track).
+  const byStorm = new Map();
+  for (const f of combinedFeats) {
+    const name = stormName(f.properties || {});
+    if (!byStorm.has(name)) byStorm.set(name, []);
+    byStorm.get(name).push(f);
+  }
+
+  let renderedStorms = 0;
+  for (const [name, feats] of byStorm.entries()) {
+    if (!feats.some(featureTouchesUS)) continue;
+    renderedStorms++;
+    renderStorm(name, feats);
+  }
+
+  if (renderedStorms === 0) {
+    listEl.innerHTML = '<div class="empty">No active US-threatening storms right now.</div>';
+  }
+
+  drawLanes();
+}
+
+function renderStorm(name, feats) {
+  const listEl = document.getElementById("storms-list");
+
+  // Choose a "primary" record for the sidebar card and popup metadata —
+  // prefer the current-position Point (carries intensity), else the cone.
+  const posFeat  = feats.find(f => f.geometry && f.geometry.type === "Point");
+  const coneFeat = feats.find(f => f.geometry && (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon"));
+  const primary  = posFeat || coneFeat || feats[0];
+  const p        = (primary && primary.properties) || {};
+
+  const adv      = p.ADVISNUM || p.advisnum || p.ADVISORY || "";
+  const basin    = p.BASIN || p.basin || "";
+  const ktRaw    = p.INTENSITY ?? p.intensity ?? p.MAXWIND ?? p.maxwind;
+  const kt       = (ktRaw != null && !isNaN(+ktRaw)) ? +ktRaw : null;
+  const mslp     = p.MSLP || p.mslp || p.PRESSURE || null;
+  const cat      = ssCategory(kt);
 
   feats.forEach((f) => {
+    const isPoint   = f.geometry && f.geometry.type === "Point";
     const isPolygon = f.geometry && (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon");
+    const isLine    = f.geometry && (f.geometry.type === "LineString" || f.geometry.type === "MultiLineString");
 
-    // Only polygons (cones) drive the lane-intersection alert logic.
+    // Only cone polygons drive the lane-intersection alert logic.
     if (isPolygon) activeConeFeatures.push(f);
 
     const layer = L.geoJSON(f, {
       style: (feat) => {
         if (feat.geometry.type === "LineString" || feat.geometry.type === "MultiLineString") {
-          // Past-track line — solid orange, lighter
           return { color: "#ec7700", weight: 2.5, opacity: 0.9, dashArray: "1 5" };
         }
-        // Polygon / MultiPolygon — cone outline + light fill
         return {
           color: "#ec7700",
           weight: 2,
@@ -1143,46 +1326,44 @@ async function refreshCones() {
           dashArray: "4 3",
         };
       },
-      pointToLayer: (feat, latlng) => L.circleMarker(latlng, {
-        radius: 6,
-        color: "#ec7700",
-        weight: 2.5,
-        fillColor: "#ec7700",
-        fillOpacity: 0.95,
-      }),
+      pointToLayer: (feat, latlng) => L.marker(latlng, { icon: stormPinIcon(), riseOnHover: true, zIndexOffset: 1000 }),
     }).addTo(conesLayer);
 
-    const p = f.properties || {};
-    const name = p.STORMNAME || p.stormname || p.NAME || "Active storm";
-    const adv  = p.ADVISNUM || p.advisnum || p.ADVISORY || "";
-    const basin = p.BASIN || p.basin || "";
-    const kind = p._kind || (isPolygon ? "cone" : (f.geometry && f.geometry.type === "Point" ? "position" : "track"));
-    const kindLabel =
-      kind === "cone"     ? "Active forecast cone" :
-      kind === "position" ? `Current position${p.INTENSITY ? ` · ${p.INTENSITY} kt` : ""}` :
-                            "Past track";
-
-    layer.bindTooltip(
-      `<span class="tip-title">${name}</span>` +
-      `<span>${basin || "Tropical system"}${adv ? " · advisory " + adv : ""}</span><br/>` +
-      `<span style="color:#ec7700;font-weight:600">${kindLabel}</span>`,
-      { sticky: true, className: "hh-tip" }
-    );
-
-    // Sidebar card — emit once per storm name (prefer the cone feature).
-    if (!seenStormCards.has(name) && (isPolygon || feats.length === 1)) {
-      seenStormCards.add(name);
-      const div = document.createElement("div");
-      div.className = "storm";
-      div.innerHTML = `
-        <div class="name">${name}${demoMode ? ' <span style="color:var(--accent);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">demo</span>' : ''}</div>
-        <div class="meta">${basin || "Tropical system"}${adv ? " · adv " + adv : ""}${p.INTENSITY ? " · " + p.INTENSITY + " kt" : ""}</div>
-      `;
-      listEl.appendChild(div);
+    // Popup on the pin; tooltip on the cone + past-track.
+    if (isPoint) {
+      const popupHtml =
+        `<div style="font-family:'Open Sans',sans-serif;font-size:12px;line-height:1.4;color:#1a1a1a;min-width:160px;">` +
+          `<div style="font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;color:#1a1a1a;margin-bottom:3px">` +
+            `${name}${demoMode ? ' <span style="color:var(--accent);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em">demo</span>' : ''}` +
+          `</div>` +
+          (cat || kt != null
+            ? `<div><strong style="color:#d32f2f">${cat || ""}</strong>${kt != null ? ` · <span class="num">${kt}</span> kt` : ""}${mslp ? ` · <span class="num">${mslp}</span> mb` : ""}</div>`
+            : `<div style="color:#666">Tropical system</div>`) +
+          (adv ? `<div style="color:#666;margin-top:2px">Advisory ${adv}${basin ? " · " + basin : ""}</div>` : "") +
+        `</div>`;
+      layer.bindPopup(popupHtml, { closeButton: true, autoPanPadding: [40, 40] });
+    } else {
+      const label =
+        isPolygon ? "Active forecast cone" :
+        isLine    ? "Past track" :
+                    "Storm feature";
+      layer.bindTooltip(
+        `<span class="tip-title">${name}</span>` +
+        `<span>${basin || "Tropical system"}${adv ? " · advisory " + adv : ""}</span><br/>` +
+        `<span style="color:#ec7700;font-weight:600">${label}</span>`,
+        { sticky: true, className: "hh-tip" }
+      );
     }
   });
 
-  drawLanes();
+  // Sidebar card — one per storm.
+  const div = document.createElement("div");
+  div.className = "storm";
+  div.innerHTML = `
+    <div class="name">${name}${demoMode ? ' <span style="color:var(--accent);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">demo</span>' : ''}</div>
+    <div class="meta">${cat ? `<strong style="color:#d32f2f">${cat}</strong>` : (basin || "Tropical system")}${kt != null ? ` · <span class="num">${kt}</span> kt` : ""}${adv ? ` · adv ${adv}` : ""}</div>
+  `;
+  listEl.appendChild(div);
 }
 
 /* =========================================================================
