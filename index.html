@@ -493,8 +493,7 @@
  *
  * Structure matches NHC layers:
  *   - "cone"     Polygon  — forecast cone (used by turf for intersect)
- *   - "position" Point    — current storm position
- *   - "track"    LineString — short past-track line
+ *   - "position" Point    — current storm position (the red pin)
  *
  * Edit freely; any Polygon features will be picked up as cone polygons.
  */
@@ -532,23 +531,6 @@ const DEMO_STORM = {
         _kind:     "position",
       },
       geometry: { type: "Point", coordinates: [-88.9, 26.0] },
-    },
-    {
-      type: "Feature",
-      properties: {
-        STORMNAME: "DEMO-IDA",
-        _kind:     "track",
-      },
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [-82.0, 16.8],
-          [-84.0, 19.2],
-          [-86.0, 21.8],
-          [-87.5, 24.0],
-          [-88.9, 26.0],
-        ],
-      },
     },
   ],
 };
@@ -1310,26 +1292,26 @@ function renderStorm(name, feats) {
     const isPolygon = f.geometry && (f.geometry.type === "Polygon" || f.geometry.type === "MultiPolygon");
     const isLine    = f.geometry && (f.geometry.type === "LineString" || f.geometry.type === "MultiLineString");
 
+    // Past-track / projected-track lines are intentionally not rendered —
+    // only the red pin (current position) and the orange cone polygon
+    // remain visible.
+    if (isLine) return;
+
     // Only cone polygons drive the lane-intersection alert logic.
     if (isPolygon) activeConeFeatures.push(f);
 
     const layer = L.geoJSON(f, {
-      style: (feat) => {
-        if (feat.geometry.type === "LineString" || feat.geometry.type === "MultiLineString") {
-          return { color: "#ec7700", weight: 2.5, opacity: 0.9, dashArray: "1 5" };
-        }
-        return {
-          color: "#ec7700",
-          weight: 2,
-          fillColor: "#ec7700",
-          fillOpacity: 0.08,
-          dashArray: "4 3",
-        };
+      style: {
+        color: "#ec7700",
+        weight: 2,
+        fillColor: "#ec7700",
+        fillOpacity: 0.08,
+        dashArray: "4 3",
       },
       pointToLayer: (feat, latlng) => L.marker(latlng, { icon: stormPinIcon(), riseOnHover: true, zIndexOffset: 1000 }),
     }).addTo(conesLayer);
 
-    // Popup on the pin; tooltip on the cone + past-track.
+    // Popup on the pin; tooltip on the cone.
     if (isPoint) {
       const popupHtml =
         `<div style="font-family:'Open Sans',sans-serif;font-size:12px;line-height:1.4;color:#1a1a1a;min-width:160px;">` +
@@ -1343,10 +1325,7 @@ function renderStorm(name, feats) {
         `</div>`;
       layer.bindPopup(popupHtml, { closeButton: true, autoPanPadding: [40, 40] });
     } else {
-      const label =
-        isPolygon ? "Active forecast cone" :
-        isLine    ? "Past track" :
-                    "Storm feature";
+      const label = isPolygon ? "Active forecast cone" : "Storm feature";
       layer.bindTooltip(
         `<span class="tip-title">${name}</span>` +
         `<span>${basin || "Tropical system"}${adv ? " · advisory " + adv : ""}</span><br/>` +
