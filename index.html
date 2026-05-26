@@ -530,7 +530,10 @@ const DEMO_STORM = {
         MSLP:      950,
         _kind:     "position",
       },
-      geometry: { type: "Point", coordinates: [-88.9, 26.0] },
+      // Pin sits just inside the cone's southern apex — the storm's
+      // current position, with the cone fanning out NW ahead of it
+      // toward the Louisiana / Mississippi coast.
+      geometry: { type: "Point", coordinates: [-88.9, 26.5] },
     },
   ],
 };
