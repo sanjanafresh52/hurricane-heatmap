@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Hurricane Heatmap — Reefer Lane Risk</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ----- Design system tokens (mirrors CLAUDE.md) ----- */
+  :root {
+    --ramp-0: #e8f1de;   /* low tint */
+    --ramp-1: #9cc176;   /* low-mid (interpolated) */
+    --ramp-2: #4a8b2c;   /* mid (Olive Drab)       */
+    --ramp-3: #1d3711;   /* high                    */
+    --ramp-4: #16290d;   /* highest                 */
+
+    --accent: #ec7700;   /* Mango Tango — selected/active only */
+
+    --neutral-fill:   #f4f4f4;
+    --neutral-border: #e5e5e5;
+    --neutral-text:   #9a9a9a;
+
+    --canvas: #fafafa;
+    --ink:    #1a1a1a;
+  }
+
+  html, body { margin: 0; padding: 0; background: var(--canvas); color: var(--ink); }
+  body {
+    font-family: "Open Sans", system-ui, sans-serif;
+    font-weight: 400;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  h1, h2, h3 { font-family: "Montserrat", system-ui, sans-serif; margin: 0; }
+  h1 { font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
+  h2 { font-weight: 600; font-size: 15px; letter-spacing: 0.02em; text-transform: uppercase; color: #444; }
+  h3 { font-weight: 500; font-size: 13px; color: #666; }
+
+  .num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+
+  header {
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid var(--neutral-border);
+    background: #fff;
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header .sub { color: #555; font-size: 13px; }
+  header .badge {
+    margin-left: auto;
+    font-size: 11px; font-weight: 600;
+    color: #fff; background: var(--ink);
+    padding: 4px 8px; border-radius: 3px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 0;
+    height: calc(100vh - 65px);
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; height: auto; } }
+
+  #map { width: 100%; height: 100%; min-height: 480px; background: #fff; }
+
+  aside {
+    border-left: 1px solid var(--neutral-border);
+    background: #fff;
+    overflow-y: auto;
+    padding: 16px 18px 24px;
+  }
+  aside section + section { margin-top: 22px; }
+
+  .legend { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+  .legend .swatches { display: flex; flex: 1; height: 12px; border-radius: 2px; overflow: hidden; }
+  .legend .swatches span { flex: 1; }
+  .legend .ends { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-top: 4px; }
+  .legend .neutral-row { display: flex; align-items: center; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--neutral-text); }
+  .legend .neutral-row .sw { width: 14px; height: 12px; background: var(--neutral-fill); border: 1px solid var(--neutral-border); border-radius: 2px; }
+
+  .lane {
+    border: 1px solid var(--neutral-border);
+    border-radius: 4px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 4px 12px;
+    align-items: center;
+    transition: border-color 120ms, background 120ms;
+  }
+  .lane:hover { background: #fcfcfc; }
+  .lane .name { font-weight: 600; }
+  .lane .ports { color: #666; font-size: 12px; grid-column: 1 / -1; }
+  .lane .status {
+    font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--neutral-text);
+  }
+  .lane.flagged { border-color: var(--accent); border-width: 1.5px; }
+  .lane.flagged .status { color: var(--accent); }
+  .lane.selected { background: #fff6ee; border-color: var(--accent); }
+
+  .storms-list .storm {
+    border: 1px solid var(--neutral-border);
+    border-radius: 4px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    font-size: 12px;
+  }
+  .storms-list .storm .name { font-weight: 600; font-size: 13px; }
+  .storms-list .storm .meta { color: #666; }
+  .storms-list .empty { color: var(--neutral-text); font-style: italic; font-size: 12px; }
+
+  .loader {
+    position: fixed; inset: 0;
+    background: rgba(250,250,250,0.96);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 9999;
+    font-family: "Montserrat", sans-serif; font-weight: 500; color: #555;
+  }
+  .loader.hidden { display: none; }
+
+  /* Leaflet tooltip override → design-system tooltip */
+  .leaflet-tooltip.hh-tip {
+    background: var(--ink);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 6px 9px;
+    font-family: "Open Sans", sans-serif;
+    font-size: 12px;
+    font-weight: 400;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.18);
+  }
+  .leaflet-tooltip.hh-tip::before { display: none; }
+  .leaflet-tooltip.hh-tip .tip-title { font-weight: 600; display: block; margin-bottom: 2px; }
+  .leaflet-tooltip.hh-tip .tip-num { font-feature-settings: "tnum"; font-variant-numeric: tabular-nums; }
+
+  .footnote {
+    font-size: 11px; color: var(--neutral-text);
+    border-top: 1px solid var(--neutral-border);
+    padding-top: 10px; margin-top: 16px;
+    line-height: 1.5;
+  }
+  code.inline { background: #f4f4f4; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
+</style>
+
+<!-- Leaflet CSS — try unpkg first; <noscript> not needed for stylesheet fallback,
+     we add fallback <link> elements via JS if the first fails to apply. -->
+<link id="leaflet-css" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+</head>
+
+<body>
+
+<div class="loader" id="loader">Loading map libraries…</div>
+
+<header>
+  <h1>Hurricane Heatmap</h1>
+  <span class="sub">Refrigerated-trucking risk · Jul–Sep window · live NHC cones</span>
+  <span class="badge" id="live-badge">Live</span>
+</header>
+
+<main>
+  <div id="map" aria-label="US hurricane risk map"></div>
+
+  <aside>
+    <section>
+      <h2>Risk legend</h2>
+      <div class="legend">
+        <div class="swatches" aria-hidden="true">
+          <span style="background:#e8f1de"></span>
+          <span style="background:#9cc176"></span>
+          <span style="background:#4a8b2c"></span>
+          <span style="background:#1d3711"></span>
+          <span style="background:#16290d"></span>
+        </div>
+      </div>
+      <div class="legend"><div class="ends" style="flex:1"><span>Low</span><span class="num">Jul–Sep storm exposure</span><span>High</span></div></div>
+      <div class="legend"><div class="neutral-row"><span class="sw"></span><span>No / minimal data</span></div></div>
+    </section>
+
+    <section>
+      <h2>Active storms (NHC)</h2>
+      <div class="storms-list" id="storms-list">
+        <div class="empty">Polling NOAA NHC…</div>
+      </div>
+      <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
+        Re-polls every 5 min. Active cone outline uses the
+        <span style="color:var(--accent);font-weight:600;">accent color</span>.
+      </div>
+    </section>
+
+    <section>
+      <h2>Reefer lane alerts</h2>
+      <div id="lanes-list"></div>
+      <div style="font-size:11px;color:var(--neutral-text);margin-top:6px;">
+        A lane is flagged when its path crosses any active NHC cone polygon
+        (turf.js intersect). Click a lane to focus the map.
+      </div>
+    </section>
+
+    <div class="footnote">
+      Risk seed is a placeholder; replace <code class="inline">STATE_RISK_SEED</code>
+      with HURDAT2-derived counts. CORS on the NHC service may fail in some browsers;
+      see README.
+    </div>
+  </aside>
+</main>
+
+<script>
+/* =========================================================================
+ *  CONFIG — edit lanes and risk seed here.
+ * ========================================================================= */
+
+/**
+ * Reefer lanes — origin/destination plus optional waypoints, in [lat, lng].
+ * Add/remove freely. Each lane's path is rendered as a polyline; turf checks
+ * its line-string against each active NHC cone polygon for intersection.
+ */
+const LANES = [
+  {
+    id: "MIA-ATL",
+    name: "Miami → Atlanta",
+    ports: "Reefer produce · I-95 / I-75",
+    waypoints: [
+      [25.7617, -80.1918],  // Miami, FL
+      [27.9506, -82.4572],  // Tampa, FL
+      [30.3322, -81.6557],  // Jacksonville, FL
+      [33.7490, -84.3880],  // Atlanta, GA
+    ],
+  },
+  {
+    id: "HOU-MEM",
+    name: "Houston → Memphis",
+    ports: "Gulf protein · I-45 / I-40",
+    waypoints: [
+      [29.7604, -95.3698],  // Houston, TX
+      [30.4515, -91.1871],  // Baton Rouge, LA
+      [32.2988, -90.1848],  // Jackson, MS
+      [35.1495, -90.0490],  // Memphis, TN
+    ],
+  },
+  {
+    id: "NOLA-CHI",
+    name: "New Orleans → Chicago",
+    ports: "Seafood reefer · I-55",
+    waypoints: [
+      [29.9511, -90.0715],  // New Orleans, LA
+      [32.2988, -90.1848],  // Jackson, MS
+      [38.6270, -90.1994],  // St. Louis, MO
+      [41.8781, -87.6298],  // Chicago, IL
+    ],
+  },
+  {
+    id: "CHS-NYC",
+    name: "Charleston → New York",
+    ports: "East-coast reefer · I-95",
+    waypoints: [
+      [32.7765, -79.9311],  // Charleston, SC
+      [34.2257, -77.9447],  // Wilmington, NC
+      [36.8508, -76.2859],  // Norfolk, VA
+      [40.7128, -74.0060],  // New York, NY
+    ],
+  },
+  {
+    id: "MOB-NSH",
+    name: "Mobile → Nashville",
+    ports: "Gulf cold-chain · I-65",
+    waypoints: [
+      [30.6954, -88.0399],  // Mobile, AL
+      [33.5186, -86.8104],  // Birmingham, AL
+      [36.1627, -86.7816],  // Nashville, TN
+    ],
+  },
+];
+
+/**
+ * STATE_RISK_SEED — placeholder Jul–Sep tropical-cyclone exposure score
+ * per US state, on a 0..1 scale.  These are illustrative.
+ *
+ * TO REPLACE WITH REAL DATA (NOAA HURDAT2):
+ *   1. Download HURDAT2 Atlantic best-track CSV:
+ *        https://www.nhc.noaa.gov/data/hurdat/hurdat2-1851-2023-051124.txt
+ *   2. Parse storm-tracks; keep only points in months 7,8,9 (Jul–Sep).
+ *   3. For each US state polygon, count how many distinct storm IDs have a
+ *      track point within ~150 km of the polygon (or intersect a buffered
+ *      state shape).
+ *   4. Normalize counts by the historical max to a 0..1 score and emit a
+ *      { "FL": 1.00, "LA": 0.93, ... } table to drop in below.
+ *   5. The same pipeline (with a date window) feeds a near-real-time variant
+ *      from the NHC active-storm REST feed used for cones.
+ */
+const STATE_RISK_SEED = {
+  // Gulf Coast & Florida — highest
+  FL: 1.00, LA: 0.95, TX: 0.78, MS: 0.85, AL: 0.82,
+  // Southeast / Atlantic — high
+  GA: 0.72, SC: 0.78, NC: 0.80, VA: 0.55,
+  // Mid-Atlantic / Northeast — moderate
+  MD: 0.42, DE: 0.40, NJ: 0.45, NY: 0.42, CT: 0.38, RI: 0.36, MA: 0.42, NH: 0.30, ME: 0.30,
+  // Inland Southeast — moderate, decay with distance
+  TN: 0.40, KY: 0.28, AR: 0.45, OK: 0.32, WV: 0.22, PA: 0.22,
+  // Lower interior — low
+  MO: 0.22, IL: 0.18, IN: 0.16, OH: 0.16, KS: 0.18,
+  // Rest of CONUS — very low (Jul–Sep tropical-cyclone exposure ≈ 0)
+  MI: 0.08, WI: 0.06, MN: 0.04, IA: 0.10, NE: 0.08, SD: 0.04, ND: 0.04,
+  CO: 0.06, NM: 0.10, AZ: 0.12, UT: 0.04, NV: 0.04, ID: 0.02, MT: 0.02, WY: 0.02,
+  WA: 0.02, OR: 0.02, CA: 0.06,
+  VT: 0.18,
+  // States with no/minimal usable data → leave undefined → grayscale neutral fill.
+  // (HI, AK, PR not shown on CONUS basemap.)
+};
+
+const NHC_POLL_MS = 5 * 60 * 1000;     // 5 min
+const STATE_TOPOJSON = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
+
+/* =========================================================================
+ *  LIB LOADER — Leaflet & Turf with unpkg → jsdelivr → cdnjs fallback.
+ *  We don't start the app until both libraries resolve.
+ * ========================================================================= */
+
+const CDN_CHAIN = {
+  leafletJs: [
+    "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+    "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js",
+  ],
+  leafletCss: [
+    "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+    "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css",
+    "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css",
+  ],
+  turfJs: [
+    "https://unpkg.com/@turf/turf@6/turf.min.js",
+    "https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js",
+  ],
+  topojsonClient: [
+    "https://unpkg.com/topojson-client@3/dist/topojson-client.min.js",
+    "https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js",
+    "https://cdnjs.cloudflare.com/ajax/libs/topojson-client/3.1.0/topojson-client.min.js",
+  ],
+};
+
+function loadScriptChain(urls, check, label) {
+  return new Promise((resolve, reject) => {
+    let i = 0;
+    const tryNext = () => {
+      if (check()) { resolve(); return; }
+      if (i >= urls.length) { reject(new Error(`All CDNs failed for ${label}`)); return; }
+      const s = document.createElement("script");
+      s.src = urls[i++];
+      s.async = true;
+      s.crossOrigin = "anonymous";
+      s.onload = () => check() ? resolve() : tryNext();
+      s.onerror = tryNext;
+      document.head.appendChild(s);
+    };
+    tryNext();
+  });
+}
+function loadCssChain(urls) {
+  // We only need one to attach; failure of one stylesheet is hard to detect, so
+  // we attach all three with low priority — duplicates are harmless.
+  urls.forEach((u, idx) => {
+    if (idx === 0) return; // first one is already in <head>
+    const l = document.createElement("link");
+    l.rel = "stylesheet"; l.href = u; l.crossOrigin = "anonymous";
+    document.head.appendChild(l);
+  });
+}
+
+async function bootLibs() {
+  loadCssChain(CDN_CHAIN.leafletCss);
+  await loadScriptChain(CDN_CHAIN.leafletJs,    () => !!window.L,         "Leaflet");
+  await loadScriptChain(CDN_CHAIN.turfJs,       () => !!window.turf,      "Turf");
+  await loadScriptChain(CDN_CHAIN.topojsonClient, () => !!window.topojson, "topojson-client");
+}
+
+/* =========================================================================
+ *  APP
+ * ========================================================================= */
+
+const STATE_FIPS_TO_USPS = {
+  "01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","11":"DC",
+  "12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY",
+  "22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT",
+  "31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH",
+  "40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT",
+  "50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY","60":"AS","66":"GU","69":"MP",
+  "72":"PR","78":"VI",
+};
+
+const RAMP = ["#e8f1de", "#9cc176", "#4a8b2c", "#1d3711", "#16290d"];
+function rampColor(score) {
+  if (score == null || isNaN(score)) return null; // → neutral
+  if (score < 0.15) return RAMP[0];
+  if (score < 0.40) return RAMP[1];
+  if (score < 0.65) return RAMP[2];
+  if (score < 0.85) return RAMP[3];
+  return RAMP[4];
+}
+
+let map, lanesLayer, conesLayer, statesLayer;
+let activeConeFeatures = []; // GeoJSON polygons used for turf intersect
+let selectedLaneId = null;
+
+async function startApp() {
+  document.getElementById("loader").classList.add("hidden");
+
+  map = L.map("map", { zoomControl: true, attributionControl: true })
+    .setView([37.5, -95.5], 4);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 12,
+    attribution: '© OpenStreetMap · © CARTO',
+    subdomains: "abcd",
+  }).addTo(map);
+
+  await drawStatesHeatmap();
+  drawLanes();
+  await refreshCones();
+  setInterval(refreshCones, NHC_POLL_MS);
+}
+
+/* ----- States heatmap ---------------------------------------------------- */
+async function drawStatesHeatmap() {
+  let topo;
+  try {
+    const r = await fetch(STATE_TOPOJSON);
+    topo = await r.json();
+  } catch (e) {
+    console.warn("us-atlas fetch failed:", e);
+    return;
+  }
+  const geo = topojson.feature(topo, topo.objects.states);
+
+  statesLayer = L.geoJSON(geo, {
+    style: (feat) => {
+      const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
+      const score = STATE_RISK_SEED[usps];
+      const fill = rampColor(score);
+      return fill
+        ? { fillColor: fill, fillOpacity: 0.82, color: "#fff", weight: 0.6 }
+        : { fillColor: "#f4f4f4", fillOpacity: 1, color: "#e5e5e5", weight: 0.6 };
+    },
+    onEachFeature: (feat, layer) => {
+      const usps = STATE_FIPS_TO_USPS[String(feat.id).padStart(2, "0")];
+      const score = STATE_RISK_SEED[usps];
+      const tipName = feat.properties && feat.properties.name ? feat.properties.name : usps;
+      const tipScore = (score == null)
+        ? '<span class="tip-num" style="color:#9a9a9a">no data</span>'
+        : `<span class="tip-num">${score.toFixed(2)}</span> Jul–Sep exposure`;
+      layer.bindTooltip(
+        `<span class="tip-title">${tipName}</span>${tipScore}`,
+        { sticky: true, className: "hh-tip" }
+      );
+      layer.on({
+        mouseover: (e) => e.target.setStyle({ weight: 1.4, color: "#fff" }),
+        mouseout:  (e) => statesLayer.resetStyle(e.target),
+      });
+    },
+  }).addTo(map);
+}
+
+/* ----- Lanes ------------------------------------------------------------- */
+function drawLanes() {
+  if (lanesLayer) lanesLayer.remove();
+  lanesLayer = L.layerGroup().addTo(map);
+
+  const listEl = document.getElementById("lanes-list");
+  listEl.innerHTML = "";
+
+  LANES.forEach((lane) => {
+    const flagged = isLaneFlagged(lane);
+    const isSel = lane.id === selectedLaneId;
+    const color = (flagged || isSel) ? "var(--accent)" : "#4a8b2c";
+    const hex = (flagged || isSel) ? "#ec7700" : "#4a8b2c";
+
+    const poly = L.polyline(lane.waypoints, {
+      color: hex,
+      weight: (flagged || isSel) ? 4 : 2.5,
+      opacity: 0.95,
+      dashArray: flagged ? null : (isSel ? null : "1, 0"),
+    }).addTo(lanesLayer);
+
+    poly.bindTooltip(
+      `<span class="tip-title">${lane.name}</span>` +
+      `<span>${lane.ports}</span><br/>` +
+      (flagged
+        ? `<span class="tip-num" style="color:#ec7700;font-weight:600">FLAGGED — crosses active cone</span>`
+        : `<span style="color:#9a9a9a">clear</span>`),
+      { sticky: true, className: "hh-tip" }
+    );
+    poly.on("click", () => selectLane(lane.id));
+
+    // origin/dest dots
+    [lane.waypoints[0], lane.waypoints[lane.waypoints.length - 1]].forEach(([la, ln]) => {
+      L.circleMarker([la, ln], {
+        radius: 4, color: hex, weight: 2, fillColor: "#fff", fillOpacity: 1,
+      }).addTo(lanesLayer);
+    });
+
+    // Sidebar row
+    const row = document.createElement("div");
+    row.className = "lane" + (flagged ? " flagged" : "") + (isSel ? " selected" : "");
+    row.dataset.id = lane.id;
+    row.innerHTML = `
+      <span class="name">${lane.name}</span>
+      <span class="status">${flagged ? "Flagged" : "Clear"}</span>
+      <span class="ports">${lane.ports}</span>
+    `;
+    row.addEventListener("click", () => selectLane(lane.id));
+    listEl.appendChild(row);
+  });
+}
+
+function selectLane(id) {
+  selectedLaneId = (selectedLaneId === id) ? null : id;
+  drawLanes();
+  if (selectedLaneId) {
+    const lane = LANES.find(l => l.id === id);
+    if (lane) {
+      const bounds = L.latLngBounds(lane.waypoints);
+      map.fitBounds(bounds.pad(0.2));
+    }
+  }
+}
+
+function isLaneFlagged(lane) {
+  if (!activeConeFeatures.length || !window.turf) return false;
+  const line = turf.lineString(lane.waypoints.map(([la, ln]) => [ln, la]));
+  return activeConeFeatures.some(cone => {
+    try {
+      return turf.booleanIntersects(line, cone);
+    } catch (e) {
+      // fall back to bounding-box check
+      try {
+        const bbox = turf.bbox(cone);
+        const bboxPoly = turf.bboxPolygon(bbox);
+        return turf.booleanIntersects(line, bboxPoly);
+      } catch (_) { return false; }
+    }
+  });
+}
+
+/* ----- NHC active-storm cones ------------------------------------------- */
+/**
+ * NOAA NHC tropical REST service hosts active hurricane / storm geometries.
+ *   Base: https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer
+ * Layer 4 is the forecast cone polygon for active Atlantic storms.
+ * Note: CORS on this service is intermittent — see README. We try the
+ * service first and degrade gracefully if blocked.
+ */
+const NHC_CONE_URL =
+  "https://mapservices.weather.noaa.gov/tropical/rest/services/tropical/NHC_tropical_weather/MapServer/4/query"
+  + "?where=1%3D1&outFields=*&f=geojson&outSR=4326";
+
+async function refreshCones() {
+  let geo = null;
+  try {
+    const r = await fetch(NHC_CONE_URL, { cache: "no-store" });
+    if (r.ok) geo = await r.json();
+  } catch (e) {
+    console.warn("NHC cone fetch blocked or failed:", e);
+  }
+
+  if (conesLayer) conesLayer.remove();
+  conesLayer = L.layerGroup().addTo(map);
+  activeConeFeatures = [];
+
+  const listEl = document.getElementById("storms-list");
+  listEl.innerHTML = "";
+
+  const feats = (geo && geo.features) ? geo.features : [];
+  if (!feats.length) {
+    listEl.innerHTML = '<div class="empty">No active cones from NHC (none in season, or CORS-blocked).</div>';
+    drawLanes(); // re-evaluate flags
+    return;
+  }
+
+  feats.forEach((f) => {
+    activeConeFeatures.push(f);
+    const layer = L.geoJSON(f, {
+      style: {
+        color: "#ec7700",          // accent — active cone outline
+        weight: 2,
+        fillColor: "#ec7700",
+        fillOpacity: 0.08,
+        dashArray: "4 3",
+      },
+    }).addTo(conesLayer);
+
+    const p = f.properties || {};
+    const name = p.STORMNAME || p.stormname || p.NAME || "Active storm";
+    const adv  = p.ADVISNUM || p.advisnum || p.ADVISORY || "";
+    const basin = p.BASIN || p.basin || "";
+    layer.bindTooltip(
+      `<span class="tip-title">${name}</span>` +
+      `<span>${basin || "Tropical system"}${adv ? " · advisory " + adv : ""}</span><br/>` +
+      `<span style="color:#ec7700;font-weight:600">Active forecast cone</span>`,
+      { sticky: true, className: "hh-tip" }
+    );
+
+    const div = document.createElement("div");
+    div.className = "storm";
+    div.innerHTML = `
+      <div class="name">${name}</div>
+      <div class="meta">${basin || "Tropical system"}${adv ? " · adv " + adv : ""}</div>
+    `;
+    listEl.appendChild(div);
+  });
+
+  drawLanes(); // re-evaluate flags now that cones changed
+}
+
+/* =========================================================================
+ *  BOOT
+ * ========================================================================= */
+bootLibs().then(startApp).catch((err) => {
+  document.getElementById("loader").textContent =
+    "Could not load map libraries from any CDN. Check your network.";
+  console.error(err);
+});
+</script>
+</body>
+</html>
