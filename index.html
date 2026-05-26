@@ -207,6 +207,78 @@
     line-height: 1.5;
   }
   code.inline { background: #f4f4f4; padding: 1px 4px; border-radius: 2px; font-size: 11px; }
+
+  /* ----- Seasonal-outlook panel ----------------------------------------- */
+  .outlook-headline {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 10px;
+  }
+  .outlook-headline .verdict {
+    font-family: "Montserrat", sans-serif;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+    letter-spacing: -0.01em;
+  }
+  .outlook-headline .pct {
+    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    font-weight: 600; font-size: 13px; color: #4a8b2c;
+  }
+  .outlook-probs { margin-top: 6px; }
+  .outlook-probs .row {
+    display: grid;
+    grid-template-columns: 90px 1fr 36px;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: #444;
+    margin-bottom: 4px;
+  }
+  .outlook-probs .row .label { text-transform: uppercase; letter-spacing: 0.05em; }
+  .outlook-probs .row .bar {
+    height: 8px; background: #f4f4f4; border-radius: 2px; overflow: hidden;
+  }
+  .outlook-probs .row .bar .fill { height: 100%; border-radius: 2px; }
+  .outlook-probs .row .val {
+    text-align: right;
+    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    color: #666;
+  }
+  .outlook-counts {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .outlook-counts .stat {
+    border: 1px solid var(--neutral-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    background: #fff;
+  }
+  .outlook-counts .stat .n {
+    display: block;
+    font-family: "Open Sans", sans-serif;
+    font-feature-settings: "tnum"; font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    font-size: 16px;
+    color: var(--ink);
+    line-height: 1.1;
+  }
+  .outlook-counts .stat .l {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #666;
+    margin-top: 2px;
+    display: block;
+  }
+  .outlook-meta {
+    font-size: 11px; color: var(--neutral-text);
+    margin-top: 10px;
+    line-height: 1.5;
+  }
+  .outlook-meta a { color: #555; text-decoration: underline; }
 </style>
 
 <link id="leaflet-css" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -247,13 +319,23 @@
       <p style="font-size:12px;color:#444;">
         Each labeled region is shaded by the <strong>average</strong> Jul–Sep
         Atlantic tropical-cyclone exposure of its member states
-        (1851–present, HURDAT2, ≤150 km of the state).
+        (1851–present, HURDAT2, ≤150 km of the state) — i.e. the long-run
+        climatology, not a forecast for this season.
       </p>
       <p style="font-size:12px;color:#444;">
-        Live NHC forecast cones are drawn on top. A reefer lane is
+        The <strong>seasonal outlook</strong> panel below summarizes NOAA CPC's
+        forecast for the current season. Live NHC forecast cones are drawn on
+        top of the heatmap. A reefer lane is
         <strong style="color:var(--accent)">flagged</strong> when its path
         crosses any active cone polygon (turf.js intersect).
       </p>
+    </section>
+
+    <section>
+      <h2>2026 seasonal outlook</h2>
+      <div id="outlook-body">
+        <div style="font-size:12px;color:var(--neutral-text)">Loading…</div>
+      </div>
     </section>
 
     <section>
@@ -377,6 +459,49 @@ const REGIONS = [
   { name: "NEW ENGLAND", label: [44.5,  -71.0], states: ["ME","NH","VT","MA","CT","RI"] },
 ];
 
+/**
+ * SEASONAL_OUTLOOK — NOAA CPC Atlantic Hurricane Season Outlook.
+ *
+ * Source: https://www.cpc.ncep.noaa.gov/products/outlooks/hurricane.shtml
+ *
+ * CPC issues this twice a year:
+ *   - Initial outlook: third or fourth Thursday of May
+ *   - Update:          early August (start of peak ASO months)
+ *
+ * No clean REST/JSON endpoint exists, so the numbers below are pinned by
+ * hand from the CPC press release.  To refresh:
+ *   1. Open the URL above; read the "Predicted Activity" paragraph.
+ *   2. Update `issued`, `probabilities`, and `ranges` below.
+ *   3. Commit.  Takes ~30 seconds, twice a year.
+ *
+ * Values shown below are CPC's 2026 May outlook, issued 21 May 2026.
+ */
+const SEASONAL_OUTLOOK = {
+  season: 2026,
+  issued: "21 May 2026",
+  source_url: "https://www.cpc.ncep.noaa.gov/products/outlooks/hurricane.shtml",
+  // CPC verdict — the highest-probability category
+  verdict: "below-normal",
+  // Probabilities sum to 100
+  probabilities: {
+    "above-normal": 10,
+    "near-normal":  35,
+    "below-normal": 55,
+  },
+  // Predicted ranges at 70% probability
+  ranges: {
+    named_storms:     [8, 14],
+    hurricanes:       [3, 6],
+    major_hurricanes: [1, 3],
+  },
+  // 1991-2020 climatological averages, for context
+  climatology: {
+    named_storms:     14,
+    hurricanes:       7,
+    major_hurricanes: 3,
+  },
+};
+
 const NHC_POLL_MS = 5 * 60 * 1000;
 const US_TOPOJSON    = "https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json";
 const STATE_RISK_JSON = "state_risk.json";
@@ -499,12 +624,62 @@ async function startApp() {
   // Fit to CONUS
   map.fitBounds([[24.5, -125], [49.5, -66.5]], { padding: [10, 10] });
 
+  renderSeasonalOutlook();
   await loadStateRisk();
   await drawStatesHeatmap();
   drawRegionLabels();
   drawLanes();
   await refreshCones();
   setInterval(refreshCones, NHC_POLL_MS);
+}
+
+function renderSeasonalOutlook() {
+  const el = document.getElementById("outlook-body");
+  if (!el || !SEASONAL_OUTLOOK) return;
+  const o = SEASONAL_OUTLOOK;
+
+  // Color each probability bar with a ramp stop: below=light, near=mid, above=dark.
+  const barColor = {
+    "below-normal": "#9cc176",
+    "near-normal":  "#4a8b2c",
+    "above-normal": "#1d3711",
+  };
+  const verdictPct = o.probabilities[o.verdict];
+
+  const probRows = Object.keys(o.probabilities).map((k) => {
+    const pct = o.probabilities[k];
+    return `<div class="row">
+      <span class="label">${k}</span>
+      <span class="bar"><span class="fill" style="width:${pct}%;background:${barColor[k]}"></span></span>
+      <span class="val">${pct}%</span>
+    </div>`;
+  }).join("");
+
+  const r = o.ranges;
+  const c = o.climatology;
+  const stat = (lo, hi, avg, label) =>
+    `<div class="stat">
+       <span class="n">${lo}–${hi}</span>
+       <span class="l">${label}</span>
+       <span class="l" style="text-transform:none;letter-spacing:0;color:#9a9a9a">avg ${avg}</span>
+     </div>`;
+
+  el.innerHTML =
+    `<div class="outlook-headline">
+       <span class="verdict">${o.verdict[0].toUpperCase() + o.verdict.slice(1)}</span>
+       <span class="pct">${verdictPct}% likely</span>
+     </div>
+     <div class="outlook-probs">${probRows}</div>
+     <div class="outlook-counts">
+       ${stat(r.named_storms[0],     r.named_storms[1],     c.named_storms,     "Named")}
+       ${stat(r.hurricanes[0],       r.hurricanes[1],       c.hurricanes,       "Hurricanes")}
+       ${stat(r.major_hurricanes[0], r.major_hurricanes[1], c.major_hurricanes, "Major (3+)")}
+     </div>
+     <div class="outlook-meta">
+       NOAA CPC · season ${o.season} · issued ${o.issued} ·
+       <a href="${o.source_url}" target="_blank" rel="noopener">source</a>.
+       Updated by CPC in early August.
+     </div>`;
 }
 
 async function loadStateRisk() {
