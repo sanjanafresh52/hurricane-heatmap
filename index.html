@@ -355,53 +355,6 @@
   }
   .outlook-meta a { color: #555; text-decoration: underline; }
 
-  /* ----- Demo storm toggle + banner ------------------------------------- */
-  .demo-toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: #fff;
-    border: 1px solid var(--neutral-border);
-    border-radius: 14px;
-    padding: 4px 10px 4px 8px;
-    margin-bottom: 8px;
-    font-family: "Open Sans", sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    color: #444;
-    cursor: pointer;
-    transition: border-color 120ms, background 120ms, color 120ms;
-  }
-  .demo-toggle:hover { background: #fafafa; }
-  .demo-toggle .pip {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: var(--neutral-border);
-    flex: 0 0 auto;
-  }
-  .demo-toggle[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: #fff6ee;
-    color: var(--ink);
-  }
-  .demo-toggle[aria-pressed="true"] .pip {
-    background: var(--accent);
-    box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--accent);
-  }
-  .demo-banner {
-    background: var(--ink);
-    color: #fff;
-    padding: 8px 24px;
-    font-family: "Open Sans", sans-serif;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    border-top:    2px solid var(--accent);
-    border-bottom: 2px solid var(--accent);
-    flex: 0 0 auto;
-  }
-  .demo-banner[hidden] { display: none; }
-  .demo-banner .accent { color: var(--accent); }
 </style>
 
 <link id="leaflet-css" rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
@@ -415,10 +368,6 @@
   <h1>Hurricane Risk &amp; Live Storm Tracker</h1>
 </header>
 
-<div id="demo-banner" class="demo-banner" hidden role="status">
-  <span class="accent">Demo mode</span> — simulated storm, not live NOAA data
-</div>
-
 <div id="panels">
   <section class="panel" id="panel-outlook">
     <h2>2026 seasonal outlook</h2>
@@ -430,9 +379,6 @@
   <section class="panel" id="panel-storms">
     <h2>Active storms (NHC)</h2>
     <div class="panel-body">
-      <button id="demo-btn" class="demo-toggle" type="button" aria-pressed="false">
-        <span class="pip"></span>Demo storm (test)
-      </button>
       <div class="storms-list" id="storms-list">
         <div class="empty">Polling NOAA NHC…</div>
       </div>
@@ -474,69 +420,6 @@
  *  CONFIG — edit lanes, risk seeds, regions, and the demo storm here.
  * ========================================================================= */
 
-/**
- * DEMO_STORM — a hand-built FeatureCollection that mimics what NOAA NHC's
- * tropical REST service returns for an active Atlantic hurricane.
- *
- * When the "Demo storm (test)" toggle is on, refreshCones() short-circuits
- * the live fetch and feeds this FeatureCollection through the EXACT same
- * downstream code path:  same parser, same #ec7700 styling, same turf.js
- * lane-intersection test.  That makes the demo a real end-to-end exercise
- * of the live-storm pipeline.
- *
- * Storm profile:
- *   "DEMO-IDA" — a plausible Cat-3 Gulf hurricane tracking NW from the
- *   central Gulf toward the Louisiana / Mississippi coast.  The cone
- *   polygon was chosen so that the New Orleans → Chicago and
- *   Houston → Memphis lanes intersect it (proving the alert path),
- *   while Mobile → Nashville stays clear.
- *
- * Structure matches NHC layers:
- *   - "cone"     Polygon  — forecast cone (used by turf for intersect)
- *   - "position" Point    — current storm position (the red pin)
- *
- * Edit freely; any Polygon features will be picked up as cone polygons.
- */
-const DEMO_STORM = {
-  type: "FeatureCollection",
-  features: [
-    {
-      type: "Feature",
-      properties: {
-        STORMNAME: "DEMO-IDA",
-        ADVISNUM:  "5A",
-        BASIN:     "AT",
-        _kind:     "cone",
-      },
-      geometry: {
-        type: "Polygon",
-        coordinates: [[
-          [-87.8, 26.4],
-          [-89.4, 28.8],
-          [-89.9, 31.9],
-          [-93.0, 31.9],
-          [-91.6, 28.8],
-          [-90.0, 26.4],
-          [-87.8, 26.4],
-        ]],
-      },
-    },
-    {
-      type: "Feature",
-      properties: {
-        STORMNAME: "DEMO-IDA",
-        ADVISNUM:  "5A",
-        INTENSITY: 115,            // kt — Cat 3
-        MSLP:      950,
-        _kind:     "position",
-      },
-      // Pin sits just inside the cone's southern apex — the storm's
-      // current position, with the cone fanning out NW ahead of it
-      // toward the Louisiana / Mississippi coast.
-      geometry: { type: "Point", coordinates: [-88.9, 26.5] },
-    },
-  ],
-};
 
 
 /**
@@ -802,7 +685,6 @@ function regionAverage(region) {
 let map, lanesLayer, conesLayer, statesLayer, regionLabelsLayer, laneLabelsLayer;
 let activeConeFeatures = [];
 let selectedLaneId = null;
-let demoMode = false;
 
 async function startApp() {
   document.getElementById("loader").classList.add("hidden");
@@ -824,13 +706,12 @@ async function startApp() {
   addMapLegend();
 
   renderSeasonalOutlook();
-  bindDemoToggle();
   await loadStateRisk();
   await drawStatesHeatmap();
   drawRegionLabels();
   drawLanes();
   await refreshCones();
-  setInterval(() => { if (!demoMode) refreshCones(); }, NHC_POLL_MS);
+  setInterval(refreshCones, NHC_POLL_MS);
 }
 
 function addMapLegend() {
@@ -856,17 +737,6 @@ function addMapLegend() {
   ctl.addTo(map);
 }
 
-function bindDemoToggle() {
-  const btn = document.getElementById("demo-btn");
-  const banner = document.getElementById("demo-banner");
-  if (!btn) return;
-  btn.addEventListener("click", () => {
-    demoMode = !demoMode;
-    btn.setAttribute("aria-pressed", demoMode ? "true" : "false");
-    banner.hidden = !demoMode;
-    refreshCones();
-  });
-}
 
 function renderSeasonalOutlook() {
   const el = document.getElementById("outlook-body");
@@ -1224,18 +1094,12 @@ async function fetchGeoJSON(url) {
 async function refreshCones() {
   let combinedFeats = [];
 
-  if (demoMode) {
-    // Demo path — feed DEMO_STORM through the EXACT same downstream
-    // pipeline as the live feed.  No special-case branches below.
-    combinedFeats = DEMO_STORM.features.slice();
-  } else {
-    const [cone, pos] = await Promise.all([
-      fetchGeoJSON(NHC_CONE_URL),
-      fetchGeoJSON(NHC_POSITION_URL),
-    ]);
-    if (cone && cone.features) combinedFeats.push(...cone.features);
-    if (pos  && pos.features)  combinedFeats.push(...pos.features);
-  }
+  const [cone, pos] = await Promise.all([
+    fetchGeoJSON(NHC_CONE_URL),
+    fetchGeoJSON(NHC_POSITION_URL),
+  ]);
+  if (cone && cone.features) combinedFeats.push(...cone.features);
+  if (pos  && pos.features)  combinedFeats.push(...pos.features);
 
   if (conesLayer) conesLayer.remove();
   conesLayer = L.layerGroup().addTo(map);
@@ -1319,7 +1183,7 @@ function renderStorm(name, feats) {
       const popupHtml =
         `<div style="font-family:'Open Sans',sans-serif;font-size:12px;line-height:1.4;color:#1a1a1a;min-width:160px;">` +
           `<div style="font-family:'Montserrat',sans-serif;font-weight:600;font-size:13px;color:#1a1a1a;margin-bottom:3px">` +
-            `${name}${demoMode ? ' <span style="color:var(--accent);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em">demo</span>' : ''}` +
+            `${name}` +
           `</div>` +
           (cat || kt != null
             ? `<div><strong style="color:#d32f2f">${cat || ""}</strong>${kt != null ? ` · <span class="num">${kt}</span> kt` : ""}${mslp ? ` · <span class="num">${mslp}</span> mb` : ""}</div>`
@@ -1342,7 +1206,7 @@ function renderStorm(name, feats) {
   const div = document.createElement("div");
   div.className = "storm";
   div.innerHTML = `
-    <div class="name">${name}${demoMode ? ' <span style="color:var(--accent);font-weight:600;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;">demo</span>' : ''}</div>
+    <div class="name">${name}</div>
     <div class="meta">${cat ? `<strong style="color:#d32f2f">${cat}</strong>` : (basin || "Tropical system")}${kt != null ? ` · <span class="num">${kt}</span> kt` : ""}${adv ? ` · adv ${adv}` : ""}</div>
   `;
   listEl.appendChild(div);
